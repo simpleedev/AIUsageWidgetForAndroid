@@ -29,7 +29,32 @@ attack.
 
 ## Verification
 
-Validation is in progress. Results and exact build identifiers will be recorded before delivery.
+Final application code revision: `fbb7e24f36adf5dcc262b06eb22c192797d6e41c`.
+Documentation-only commits after this revision do not change the built application.
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Unit security tests | PASS: 8 tests, 0 failures | Hostile URLs, frame isolation, encryption integrity/nonces, redirect isolation, response bounds, and log redaction. |
+| Android 14 instrumentation | PASS: 14 tests, 0 failures, 0 skipped | Migration, failure/restart paths, logout races, service isolation, real Keystore, WebView configuration/bridge absence, receiver/PendingIntent metadata, backup rules, token parsing, and persisted log redaction. |
+| Release lint | PASS: 0 errors; 122 warnings remain | Warnings include the older target SDK, dependency updates, and pre-existing UI/accessibility/localization concerns. No baseline or global error suppression was added. |
+| Signed release build | PASS | GitHub security tests gate signing; pinned certificate verified in CI and locally with apksigner. |
+| Compiled release manifest | PASS | `allowBackup=false`, `usesCleartextTraffic=false`, both backup resource references present, and no debug flag enabled. |
+| OnePlus Android API 36 instrumentation | PASS: 14 tests | The complete Android test suite also ran on the authorized phone in the separate test application before the final navigation/test-label adjustment; its credential/encryption implementation is identical to the final build. |
+| Upgrade and session migration | PASS | Signed v1.1.9 installed over v1.1.8 without uninstalling. Both regular service tabs still showed Connected. Usage-display choices and enabled notifications were preserved. |
+| Release debug exposure | PASS | The v1.1.8 WebView debug socket was present. The upgraded signed release had no matching WebView debug socket; `run-as` was rejected because the package is not debuggable. |
+| Existing widget refresh | PASS, user confirmed | Both services refreshed successfully using the migrated encrypted sessions. |
+| Fresh Google sign-in | PASS, user confirmed | Re-login succeeded for both Claude and ChatGPT, exercising session capture/storage with the native ChatGPT token request. This manual check was performed on the preceding signed candidate; the final revision only broadens HTTPS subframe compatibility while retaining the same main-frame restrictions, and gives the test install a distinct label. |
+| Device cleanup | PASS | Temporary `.securitytest` and `.securitytest.test` applications removed. Only the regular signed application remains. |
+
+Final CI: [security tests and signed build](https://github.com/simpleedev/AIUsageWidgetForAndroid/actions/runs/37422526454).
+The final signed APK was installed on the OnePlus after the manual checks, preserving its app data.
+
+APK: `AIUsageWidget-v1.1.9.apk`.
+
+- APK SHA-256: `e0bb5672e43259aacb55971ea2812e139041fc0fccba335e9cf0e1e8a619cf1a`
+- Signer certificate SHA-256: `57fa69ea917871ffeb1b762b59d52284f8a3b78a06309a61783195d9f61de860`
+- [Signed APK artifact](https://github.com/simpleedev/AIUsageWidgetForAndroid/actions/runs/37422526454/artifacts/11392954484)
+- [Automated reports](https://github.com/simpleedev/AIUsageWidgetForAndroid/actions/runs/37422526454/artifacts/11392984219)
 
 Automated cases cover hostile URLs, authenticated-encryption tampering, nonce uniqueness,
 wrong service/revision/key, redirect credential isolation, oversized responses, log redaction,
@@ -40,6 +65,11 @@ backup exclusions, and token parsing.
 The debug application uses a separate `.securitytest` application ID, so synthetic security tests
 cannot modify the signed application's sessions or settings. Device testing is authorized for the
 connected OnePlus CPH2551 (Android API 36).
+
+Phone UI automation was paused when its foreground changed during checks, to avoid interacting
+with unrelated apps. The user completed the live refresh and sign-in checks. No real credential
+values were extracted, printed, or committed. Screenshots used for inspection remain in ignored
+local working files rather than the repository or public report.
 
 ## Remaining limits and operational effects
 

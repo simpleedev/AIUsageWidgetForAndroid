@@ -7,13 +7,11 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
 import android.widget.RemoteViews
 
 class ClaudeWidgetProvider : AppWidgetProvider() {
 
     companion object {
-        private const val TAG = "ClaudeWidget"
         const val ACTION_REFRESH = "com.example.claudewidget.ACTION_REFRESH"
 
         fun updateAllWidgets(context: Context) {
@@ -60,7 +58,7 @@ class ClaudeWidgetProvider : AppWidgetProvider() {
                 // Refresh on body tap
                 val refreshIntent2 = Intent(context, QuotaNotificationReceiver::class.java).apply {
                     action = QuotaNotifications.ACTION_REFRESH
-                putExtra(QuotaNotifications.EXTRA_SERVICE, "claude")
+                    putExtra(QuotaNotifications.EXTRA_SERVICE, "claude")
                 }
                 val refreshPending2 = PendingIntent.getBroadcast(
                     context, 2, refreshIntent2,
@@ -100,7 +98,7 @@ class ClaudeWidgetProvider : AppWidgetProvider() {
                 // Keep click handlers
                 val refreshIntent = Intent(context, QuotaNotificationReceiver::class.java).apply {
                     action = QuotaNotifications.ACTION_REFRESH
-                putExtra(QuotaNotifications.EXTRA_SERVICE, "claude")
+                    putExtra(QuotaNotifications.EXTRA_SERVICE, "claude")
                 }
                 views.setOnClickPendingIntent(R.id.btn_refresh, PendingIntent.getBroadcast(
                     context, 0, refreshIntent,
@@ -118,7 +116,7 @@ class ClaudeWidgetProvider : AppWidgetProvider() {
                 } else {
                     val refreshIntent2 = Intent(context, QuotaNotificationReceiver::class.java).apply {
                         action = QuotaNotifications.ACTION_REFRESH
-                putExtra(QuotaNotifications.EXTRA_SERVICE, "claude")
+                        putExtra(QuotaNotifications.EXTRA_SERVICE, "claude")
                     }
                     views.setOnClickPendingIntent(R.id.widget_root, PendingIntent.getBroadcast(
                         context, 2, refreshIntent2,

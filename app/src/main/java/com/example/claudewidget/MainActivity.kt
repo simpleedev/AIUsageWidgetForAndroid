@@ -323,8 +323,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** Forgets the session the widget uses for [service]. The other service is untouched. */
-    private fun clearSavedSession(service: String) {
-        sessions.clear(service)
+    private fun clearSavedSession(service: String): Boolean {
+        try {
+            sessions.clear(service)
+        } catch (e: Exception) {
+            AppLog.e(this, "Security", "Unable to remove saved sign-in", e)
+            Toast.makeText(this, "Unable to remove saved sign-in. Please try again.", Toast.LENGTH_LONG).show()
+            return false
+        }
         val prefix = keyPrefix(service)
         sharedPrefs.edit().apply {
             listOf("session_pct", "session_reset", "session_prog", "session_reset_epoch_ms",
@@ -334,14 +340,17 @@ class MainActivity : AppCompatActivity() {
         }.apply()
         QuotaNotifications.cancel(this, service)
         updateWidgetsFor(service)
+        return true
     }
 
     /** Deletes [service]'s cookies and web storage, leaving the other service and the Google sign-in alone. */
     private fun clearSiteData(service: String) {
         if (service == "claude") {
             clearSiteData(
-                urls = listOf("https://claude.ai", "https://claude.ai/", "https://api.claude.ai", "https://anthropic.com"),
-                domains = listOf("claude.ai", ".claude.ai", "anthropic.com", ".anthropic.com"),
+                urls = listOf("https://claude.ai", "https://claude.ai/", "https://api.claude.ai", "https://anthropic.com",
+                    "https://auth.claude.ai", "https://console.anthropic.com", "https://platform.claude.com"),
+                domains = listOf("claude.ai", ".claude.ai", "api.claude.ai", "auth.claude.ai", "anthropic.com", ".anthropic.com",
+                    "console.anthropic.com", "platform.claude.com", ".claude.com"),
                 knownNames = setOf(
                     "sessionKey",
                     "cf_clearance",
@@ -353,12 +362,15 @@ class MainActivity : AppCompatActivity() {
                     "intercom-id",
                     "intercom-session"
                 ),
-                origins = listOf("https://claude.ai", "https://api.claude.ai", "https://anthropic.com")
+                origins = listOf("https://claude.ai", "https://api.claude.ai", "https://anthropic.com", "https://auth.claude.ai",
+                    "https://console.anthropic.com", "https://platform.claude.com")
             )
         } else {
             clearSiteData(
-                urls = listOf("https://chatgpt.com", "https://chatgpt.com/", "https://oaistatic.com", "https://openai.com"),
-                domains = listOf("chatgpt.com", ".chatgpt.com", "oaistatic.com", ".oaistatic.com", "openai.com", ".openai.com"),
+                urls = listOf("https://chatgpt.com", "https://chatgpt.com/", "https://oaistatic.com", "https://openai.com",
+                    "https://auth.openai.com", "https://auth0.openai.com"),
+                domains = listOf("chatgpt.com", ".chatgpt.com", "oaistatic.com", ".oaistatic.com", "openai.com", ".openai.com",
+                    "auth.openai.com", "auth0.openai.com"),
                 knownNames = setOf(
                     "__Secure-next-auth.session-token",
                     "next-auth.session-token",
@@ -368,7 +380,7 @@ class MainActivity : AppCompatActivity() {
                     "oai-did",
                     "oai-nav-state"
                 ),
-                origins = listOf("https://chatgpt.com", "https://openai.com")
+                origins = listOf("https://chatgpt.com", "https://openai.com", "https://auth.openai.com", "https://auth0.openai.com")
             )
         }
     }
@@ -555,7 +567,7 @@ class MainActivity : AppCompatActivity() {
 
         // ---- Re-login button (clears this service's session only, preserves Google account) ----
         findViewById<View>(R.id.btn_relogin).setOnClickListener {
-            clearSavedSession(service)
+            if (!clearSavedSession(service)) return@setOnClickListener
             clearSiteData(service)
             AppLog.i(this, serviceName(service), "Re-login: cleared the saved session")
             showLoginScreen(restart = true)
@@ -565,7 +577,7 @@ class MainActivity : AppCompatActivity() {
         val fullLogoutBtn = findViewById<TextView>(R.id.btn_full_logout)
         fullLogoutBtn.text = "Log out of ${serviceName(service)} completely (clear Google session)"
         fullLogoutBtn.setOnClickListener {
-            clearSavedSession(service)
+            if (!clearSavedSession(service)) return@setOnClickListener
             clearSiteData(service)
             AppLog.i(this, serviceName(service), "Full logout: cleared the saved session and all cookies")
             // Clearing the Google sign-in reliably takes removing every cookie. The other service stays
@@ -573,6 +585,9 @@ class MainActivity : AppCompatActivity() {
             CookieManager.getInstance().removeAllCookies {
                 CookieManager.getInstance().flush()
                 runOnUiThread {
+                    WebStorage.getInstance().deleteAllData()
+                    claudeBrowser.webView.clearCache(true)
+                    chatGptBrowser.webView.clearCache(true)
                     if (currentTab == service) showLoginScreen(restart = true)
                 }
             }
@@ -696,6 +711,7 @@ class MainActivity : AppCompatActivity() {
             loginCheckHandler.removeCallbacks(pollRunnable)
             closePopup()
             webView.stopLoading()
+            clearHistoryOnNextPage = true
             webView.loadUrl("about:blank")
         }
 
@@ -724,6 +740,7 @@ class MainActivity : AppCompatActivity() {
             applyBrowserSettings(newWebView)
 
             newWebView.webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean = true
                 override fun onCloseWindow(window: WebView?) {
                     if (window === popup) closePopup()
                 }

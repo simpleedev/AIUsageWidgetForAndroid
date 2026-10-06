@@ -805,7 +805,7 @@ class MainActivity : AppCompatActivity() {
             override fun onFailure(call: Call, e: IOException) = completed(call, null)
             override fun onResponse(call: Call, response: Response) {
                 val token = response.use {
-                    try { if (it.isSuccessful) SessionHttp.accessToken(it.body?.string()) else null }
+                    try { if (it.isSuccessful) SessionHttp.accessToken(SessionHttp.readBody(it)) else null }
                     catch (_: Exception) { null }
                 }
                 completed(call, token)

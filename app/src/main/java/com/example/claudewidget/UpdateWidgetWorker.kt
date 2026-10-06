@@ -351,7 +351,7 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
                 .build()
 
             val orgResponse = client.newCall(orgRequest).execute()
-            val orgBody = orgResponse.body?.string()
+            val orgBody = orgResponse.use { SessionHttp.readBody(it) }
             if (orgResponse.code == 401 || orgResponse.code == 403) {
                 setClaudeErrorState("Session expired — tap to log in",
                     "Organizations request rejected (${httpSummary(orgResponse.code, orgBody)})")
@@ -381,7 +381,7 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
                 .build()
 
             val usageResponse = client.newCall(usageRequest).execute()
-            val usageBody = usageResponse.body?.string()
+            val usageBody = usageResponse.use { SessionHttp.readBody(it) }
             if (usageResponse.code == 401 || usageResponse.code == 403) {
                 setClaudeErrorState("Session expired — tap to log in",
                     "Usage request rejected (${httpSummary(usageResponse.code, usageBody)})")
@@ -504,17 +504,20 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
             // If 401 and we have cookies, attempt token refresh once
             if (usageResponse.code == 401 && !cookies.isNullOrEmpty()) {
                 AppLog.i(applicationContext, "ChatGPT", "Access token rejected (HTTP 401), getting a new one")
+                usageResponse.close()
                 val refreshedToken = refreshChatGptToken(client, cookies, chatGptUa)
                 if (!refreshedToken.isNullOrEmpty()) {
-                    usageResponse.close()
                     currentToken = refreshedToken
                     if (!sessions.updateToken(session, refreshedToken)) return Outcome.UPDATED
                     usageRequest = buildChatGptRequest(currentToken, chatGptUa, cookies)
                     usageResponse = client.newCall(usageRequest).execute()
+                } else {
+                    setChatGptErrorState("Session expired — tap to log in", "Saved session could not refresh the access token")
+                    return Outcome.FAILED
                 }
             }
 
-            val body = usageResponse.body?.string()
+            val body = usageResponse.use { SessionHttp.readBody(it) }
             if (usageResponse.code == 401 || usageResponse.code == 403) {
                 setChatGptErrorState("Session expired — tap to log in",
                     "Usage request rejected (${httpSummary(usageResponse.code, body)})")
@@ -625,7 +628,7 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
     private fun refreshChatGptToken(client: OkHttpClient, cookies: String, ua: String): String? {
         try {
             SessionHttp.chatGptSessionCall(client, cookies, ua).execute().use { resp ->
-            val body = resp.body?.string()
+            val body = SessionHttp.readBody(resp)
             if (resp.isSuccessful && !body.isNullOrEmpty()) {
                 val token = SessionHttp.accessToken(body)
                 if (token != null) {

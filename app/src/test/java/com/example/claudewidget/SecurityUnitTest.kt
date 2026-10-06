@@ -75,4 +75,16 @@ class SecurityUnitTest {
         }
         assertEquals("HTTP 403", SafeDiagnostics.redact("HTTP 403"))
     }
+
+    @Test fun oversizedChunkedResponsesAreRejectedBeforeParsing() {
+        val server = MockWebServer()
+        server.start()
+        try {
+            server.enqueue(MockResponse().setChunkedBody("x".repeat(1024 * 1024 + 1), 4096))
+            val request = okhttp3.Request.Builder().url(server.url("/oversized")).build()
+            SessionHttp.client().newCall(request).execute().use { response ->
+                assertThrows(IllegalArgumentException::class.java) { SessionHttp.readBody(response) }
+            }
+        } finally { server.shutdown() }
+    }
 }

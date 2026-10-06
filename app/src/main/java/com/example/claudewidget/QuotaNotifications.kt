@@ -3,6 +3,7 @@ package com.example.claudewidget
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.Notification
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -110,7 +111,7 @@ object QuotaNotifications {
             append("Weekly: $weeklyText — $weeklyReset")
         }
 
-        NotificationManagerCompat.from(context).notify(
+        notifySafely(context,
             notificationId(service),
             baseBuilder(context, service)
                 .setContentTitle(title)
@@ -131,7 +132,7 @@ object QuotaNotifications {
         val prefix = if (service == "chatgpt") "chatgpt_" else ""
         val weeklyUsed = prefs.getInt("${prefix}weekly_prog", 0)
         val title = notificationTitle(prefs, prefix, weeklyUsed, name)
-        NotificationManagerCompat.from(context).notify(
+        notifySafely(context,
             notificationId(service),
             baseBuilder(context, service)
                 .setContentTitle(title)
@@ -215,6 +216,16 @@ object QuotaNotifications {
     fun canPostNotifications(context: Context): Boolean {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun notifySafely(context: Context, id: Int, notification: Notification) {
+        if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        try {
+            NotificationManagerCompat.from(context).notify(id, notification)
+        } catch (e: SecurityException) {
+            // Permission can be revoked between the check and the actual notification operation.
+            AppLog.w(context, "Notifications", "Notification permission unavailable", e)
+        }
     }
 
     private fun baseBuilder(context: Context, service: String): NotificationCompat.Builder {

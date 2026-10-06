@@ -17,7 +17,7 @@ signing certificate, so installing 1.0.9 over an older build fails until the old
 removed. Uninstalling clears app data, so you will need to sign in to Claude and ChatGPT
 again — once.
 
-## [1.1.9] - Unreleased
+## [1.1.9] - 2026-10-05
 
 ### Security
 - Encrypt saved Claude and ChatGPT sessions with AES-GCM and Android Keystore, migrating existing

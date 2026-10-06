@@ -136,7 +136,8 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
             val minutes = duration.toMinutes()
 
             return if (days > 0) "Resets in ${days}d ${hours}h"
-            else "Resets in ${hours}h ${minutes}m"
+            else if (hours > 0) "Resets in ${hours}h ${minutes}m"
+            else "Resets in ${minutes}m"
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse reset time: $isoString", e)
             return "Unknown"

@@ -17,6 +17,12 @@ signing certificate, so installing 1.0.9 over an older build fails until the old
 removed. Uninstalling clears app data, so you will need to sign in to Claude and ChatGPT
 again — once.
 
+## [1.1.8] - 2026-10-05
+
+### Changed
+- **Reset countdowns omit zero hours when less than an hour remains.** Claude session and
+  weekly countdowns now show `Resets in 25m` instead of `Resets in 0h 25m`, matching ChatGPT.
+
 ## [1.1.7] - 2026-09-29
 
 ### Fixed

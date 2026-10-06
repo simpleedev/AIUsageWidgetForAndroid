@@ -17,6 +17,22 @@ signing certificate, so installing 1.0.9 over an older build fails until the old
 removed. Uninstalling clears app data, so you will need to sign in to Claude and ChatGPT
 again — once.
 
+## [1.1.9] - 2026-10-05
+
+### Security
+- Encrypt saved Claude and ChatGPT sessions with AES-GCM and Android Keystore, migrating existing
+  credentials only after a verified encrypted write. Damaged records and missing keys fail closed.
+- Exclude app data, WebView sessions, and logs from cloud backups and device transfers.
+- Disable release WebView debugging, mixed HTTP content, and local file/content access. Restrict
+  login navigation and popups to explicit HTTPS authentication hosts.
+- Remove the ChatGPT JavaScript token bridge and retrieve tokens through a fixed native session
+  request. Credential-bearing native requests no longer follow redirects.
+- Route widget refresh actions through a private receiver and reject stale refresh results after
+  logout or re-login. Clear the logged-out service's quota readings.
+- Remove raw HTTP error bodies, webpage console output, and exception details from diagnostics;
+  clear logs from previous versions once on upgrade.
+- Add unit and Android instrumentation tests; verify them before building signed APKs in CI.
+
 ## [1.1.8] - 2026-10-05
 
 ### Changed

@@ -3,6 +3,7 @@ package com.example.claudewidget
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.Notification
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -77,7 +78,7 @@ object QuotaNotifications {
         if (!canPostNotifications(context)) return
 
         val prefs = prefs(context)
-        if (!isLoggedIn(prefs, service)) {
+        if (!SessionStore.get(context).isLoggedIn(service)) {
             cancel(context, service)
             return
         }
@@ -110,7 +111,7 @@ object QuotaNotifications {
             append("Weekly: $weeklyText — $weeklyReset")
         }
 
-        NotificationManagerCompat.from(context).notify(
+        notifySafely(context,
             notificationId(service),
             baseBuilder(context, service)
                 .setContentTitle(title)
@@ -124,14 +125,14 @@ object QuotaNotifications {
     fun showRefreshing(context: Context, service: String) {
         if (!isEnabled(context, service) || !canPostNotifications(context)) return
         val prefs = prefs(context)
-        if (!isLoggedIn(prefs, service)) return
+        if (!SessionStore.get(context).isLoggedIn(service)) return
 
         ensureChannel(context)
         val name = if (service == "chatgpt") "ChatGPT" else "Claude"
         val prefix = if (service == "chatgpt") "chatgpt_" else ""
         val weeklyUsed = prefs.getInt("${prefix}weekly_prog", 0)
         val title = notificationTitle(prefs, prefix, weeklyUsed, name)
-        NotificationManagerCompat.from(context).notify(
+        notifySafely(context,
             notificationId(service),
             baseBuilder(context, service)
                 .setContentTitle(title)
@@ -205,7 +206,7 @@ object QuotaNotifications {
     private fun needsResetTimestamp(context: Context, service: String): Boolean {
         if (!isEnabled(context, service)) return false
         val prefs = prefs(context)
-        if (!isLoggedIn(prefs, service)) return false
+        if (!SessionStore.get(context).isLoggedIn(service)) return false
         val prefix = if (service == "chatgpt") "chatgpt_" else ""
         val weeklyUsed = prefs.getInt("${prefix}weekly_prog", 0)
         if (weeklyUsed < 100 && prefs.getString("${prefix}session_reset", null) == "Ready") return false
@@ -215,6 +216,16 @@ object QuotaNotifications {
     fun canPostNotifications(context: Context): Boolean {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun notifySafely(context: Context, id: Int, notification: Notification) {
+        if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        try {
+            NotificationManagerCompat.from(context).notify(id, notification)
+        } catch (e: SecurityException) {
+            // Permission can be revoked between the check and the actual notification operation.
+            AppLog.w(context, "Notifications", "Notification permission unavailable", e)
+        }
     }
 
     private fun baseBuilder(context: Context, service: String): NotificationCompat.Builder {
@@ -279,12 +290,4 @@ object QuotaNotifications {
     private fun prefs(context: Context) =
         context.getSharedPreferences("ClaudeWidgetPrefs", Context.MODE_PRIVATE)
 
-    private fun isLoggedIn(prefs: android.content.SharedPreferences, service: String): Boolean {
-        return if (service == "chatgpt") {
-            !prefs.getString("chatgpt_access_token", null).isNullOrEmpty() ||
-                !prefs.getString("chatgpt_saved_cookies", null).isNullOrEmpty()
-        } else {
-            !prefs.getString("saved_cookies", null).isNullOrEmpty()
-        }
-    }
 }

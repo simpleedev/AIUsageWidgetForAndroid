@@ -30,6 +30,10 @@ import java.util.concurrent.TimeUnit
 class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
     CoroutineWorker(appContext, workerParams) {
 
+    private val sessions by lazy { SessionStore.get(applicationContext) }
+    private var claudeSession: SessionStore.Snapshot? = null
+    private var chatGptSession: SessionStore.Snapshot? = null
+
     companion object {
         private const val TAG = "UpdateWidgetWorker"
 
@@ -139,7 +143,7 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
             else if (hours > 0) "Resets in ${hours}h ${minutes}m"
             else "Resets in ${minutes}m"
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse reset time: $isoString", e)
+            AppLog.w(applicationContext, "Claude", "Failed to parse reset time", e)
             return "Unknown"
         }
     }
@@ -151,7 +155,7 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
                 .toInstant()
                 .toEpochMilli()
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse reset timestamp: $isoString", e)
+            AppLog.w(applicationContext, "Claude", "Failed to parse reset timestamp", e)
             0L
         }
     }
@@ -194,40 +198,46 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
 
     /** Shows an explicit Error state on the Claude widget and records [detail] in the in-app log. */
     private fun setClaudeErrorState(message: String, detail: String, error: Throwable? = null) {
-        AppLog.e(applicationContext, "Claude", detail, error)
-        val prefs = applicationContext.getSharedPreferences("ClaudeWidgetPrefs", Context.MODE_PRIVATE)
-        prefs.edit()
-            .putString("session_pct", "Error")
-            .putString("session_reset", "Error")
-            .putInt("session_prog", 0)
-            .putLong("session_reset_epoch_ms", 0L)
-            .putString("weekly_pct", "Error")
-            .putString("weekly_reset", "Error")
-            .putInt("weekly_prog", 0)
-            .putLong("weekly_reset_epoch_ms", 0L)
-            .putString("claude_error_message", message)
-            .apply()
-        ClaudeWidgetProvider.updateAllWidgets(applicationContext)
-        QuotaNotifications.updateService(applicationContext, "claude")
+        val session = claudeSession ?: return
+        sessions.ifCurrent(session) {
+            AppLog.e(applicationContext, "Claude", detail, error)
+            val prefs = applicationContext.getSharedPreferences("ClaudeWidgetPrefs", Context.MODE_PRIVATE)
+            prefs.edit()
+                .putString("session_pct", "Error")
+                .putString("session_reset", "Error")
+                .putInt("session_prog", 0)
+                .putLong("session_reset_epoch_ms", 0L)
+                .putString("weekly_pct", "Error")
+                .putString("weekly_reset", "Error")
+                .putInt("weekly_prog", 0)
+                .putLong("weekly_reset_epoch_ms", 0L)
+                .putString("claude_error_message", message)
+                .apply()
+            ClaudeWidgetProvider.updateAllWidgets(applicationContext)
+            QuotaNotifications.updateService(applicationContext, "claude")
+        }
     }
 
     /** Shows an explicit Error state on the ChatGPT widget and records [detail] in the in-app log. */
     private fun setChatGptErrorState(message: String, detail: String, error: Throwable? = null) {
-        AppLog.e(applicationContext, "ChatGPT", detail, error)
-        val prefs = applicationContext.getSharedPreferences("ClaudeWidgetPrefs", Context.MODE_PRIVATE)
-        prefs.edit()
-            .putString("chatgpt_session_pct", "Error")
-            .putString("chatgpt_session_reset", "Error")
-            .putInt("chatgpt_session_prog", 0)
-            .putLong("chatgpt_session_reset_epoch_ms", 0L)
-            .putString("chatgpt_weekly_pct", "Error")
-            .putString("chatgpt_weekly_reset", "Error")
-            .putInt("chatgpt_weekly_prog", 0)
-            .putLong("chatgpt_weekly_reset_epoch_ms", 0L)
-            .putString("chatgpt_error_message", message)
-            .apply()
-        ChatGptWidgetProvider.updateAllWidgets(applicationContext)
-        QuotaNotifications.updateService(applicationContext, "chatgpt")
+        val session = chatGptSession ?: return
+        sessions.ifCurrent(session) {
+            AppLog.e(applicationContext, "ChatGPT", detail, error)
+            val prefs = applicationContext.getSharedPreferences("ClaudeWidgetPrefs", Context.MODE_PRIVATE)
+            prefs.edit()
+                .putString("chatgpt_session_pct", "Error")
+                .putString("chatgpt_session_reset", "Error")
+                .putInt("chatgpt_session_prog", 0)
+                .putLong("chatgpt_session_reset_epoch_ms", 0L)
+                .putString("chatgpt_weekly_pct", "Error")
+                .putString("chatgpt_weekly_reset", "Error")
+                .putInt("chatgpt_weekly_prog", 0)
+                .putLong("chatgpt_weekly_reset_epoch_ms", 0L)
+                .putString("chatgpt_error_message", message)
+                .apply()
+            ChatGptWidgetProvider.updateAllWidgets(applicationContext)
+            QuotaNotifications.updateService(applicationContext, "chatgpt")
+        }
     }
 
     /** How one service's refresh went. OFFLINE (the server couldn't be reached) is worth retrying. */
@@ -243,6 +253,13 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
      * [name] is "Claude" or "ChatGPT"; [prefix] is the service's pref key prefix.
      */
     private fun setOfflineState(name: String, prefix: String, error: IOException): Outcome {
+        val session = (if (prefix.isEmpty()) claudeSession else chatGptSession) ?: return Outcome.UPDATED
+        var outcome = Outcome.UPDATED
+        sessions.ifCurrent(session) { outcome = setOfflineStateCurrent(name, prefix, error) }
+        return outcome
+    }
+
+    private fun setOfflineStateCurrent(name: String, prefix: String, error: IOException): Outcome {
         val prefs = applicationContext.getSharedPreferences("ClaudeWidgetPrefs", Context.MODE_PRIVATE)
         val hasReading = prefs.getString("${prefix}session_pct", null)?.endsWith("% used") == true
 
@@ -273,11 +290,8 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
         return Outcome.OFFLINE
     }
 
-    /** "HTTP 403: <start of body>" for the log. Only used for failed calls, whose bodies are error messages. */
-    private fun httpSummary(code: Int, body: String?): String {
-        val snippet = body?.replace(Regex("\\s+"), " ")?.trim()?.take(160)
-        return if (snippet.isNullOrEmpty()) "HTTP $code" else "HTTP $code: $snippet"
-    }
+    /** Error bodies are untrusted and can contain credentials; retain only the status code. */
+    private fun httpSummary(code: Int, @Suppress("UNUSED_PARAMETER") body: String?) = "HTTP $code"
 
     private fun nowTimestamp(): String {
         return SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
@@ -285,17 +299,14 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
 
     override suspend fun doWork(): Result {
         val prefs = applicationContext.getSharedPreferences("ClaudeWidgetPrefs", Context.MODE_PRIVATE)
-        val defaultUa = prefs.getString("user_agent",
-            "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")!!
-
-        val client = OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
-            .build()
+        val defaultUa = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36"
+        val client = SessionHttp.client()
+        claudeSession = sessions.snapshot("claude")
+        chatGptSession = sessions.snapshot("chatgpt")
 
         // 1. Update Claude if configured
         var claudeOutcome = Outcome.UPDATED
-        val claudeCookies = prefs.getString("saved_cookies", null)
+        val claudeCookies = claudeSession?.cookies
         if (!claudeCookies.isNullOrEmpty()) {
             claudeOutcome = updateClaude(client, prefs, defaultUa, claudeCookies)
         } else {
@@ -306,8 +317,8 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
 
         // 2. Update ChatGPT if configured
         var chatGptOutcome = Outcome.UPDATED
-        val chatGptToken = prefs.getString("chatgpt_access_token", null)
-        val chatGptCookies = prefs.getString("chatgpt_saved_cookies", null)
+        val chatGptToken = chatGptSession?.accessToken
+        val chatGptCookies = chatGptSession?.cookies
         if (!chatGptToken.isNullOrEmpty() || !chatGptCookies.isNullOrEmpty()) {
             chatGptOutcome = updateChatGpt(client, prefs, defaultUa, chatGptToken, chatGptCookies)
         } else {
@@ -326,7 +337,8 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
         defaultUa: String,
         cookies: String
     ): Outcome {
-        val ua = prefs.getString("user_agent", defaultUa) ?: defaultUa
+        val session = claudeSession ?: return Outcome.UPDATED
+        val ua = session.userAgent ?: defaultUa
 
         try {
             Log.d(TAG, "Fetching Claude organizations...")
@@ -339,7 +351,7 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
                 .build()
 
             val orgResponse = client.newCall(orgRequest).execute()
-            val orgBody = orgResponse.body?.string()
+            val orgBody = orgResponse.use { SessionHttp.readBody(it) }
             if (orgResponse.code == 401 || orgResponse.code == 403) {
                 setClaudeErrorState("Session expired — tap to log in",
                     "Organizations request rejected (${httpSummary(orgResponse.code, orgBody)})")
@@ -358,7 +370,8 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
             }
             val orgId = orgArray.getJSONObject(0).getString("uuid")
 
-            Log.d(TAG, "Fetching Claude usage for org $orgId...")
+            require(orgId.matches(Regex("[A-Za-z0-9_-]{1,128}"))) { "Invalid organization identifier" }
+            Log.d(TAG, "Fetching Claude usage...")
             val usageRequest = Request.Builder()
                 .url("https://claude.ai/api/organizations/$orgId/usage")
                 .header("Cookie", cookies)
@@ -368,7 +381,7 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
                 .build()
 
             val usageResponse = client.newCall(usageRequest).execute()
-            val usageBody = usageResponse.body?.string()
+            val usageBody = usageResponse.use { SessionHttp.readBody(it) }
             if (usageResponse.code == 401 || usageResponse.code == 403) {
                 setClaudeErrorState("Session expired — tap to log in",
                     "Usage request rejected (${httpSummary(usageResponse.code, usageBody)})")
@@ -429,24 +442,26 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
             }
 
             val updatedAt = nowTimestamp()
-            prefs.edit()
-                .putString("session_pct", sessionPct)
-                .putString("session_reset", sessionReset)
-                .putInt("session_prog", sessionProg)
-                .putLong("session_reset_epoch_ms", sessionResetEpochMs)
-                .putString("weekly_pct", weeklyPct)
-                .putString("weekly_reset", weeklyReset)
-                .putInt("weekly_prog", weeklyProg)
-                .putLong("weekly_reset_epoch_ms", weeklyResetEpochMs)
-                .putString("last_update", "Updated $updatedAt")
-                .putString("updated_at", updatedAt)
-                .putLong("last_successful_refresh_epoch_ms", System.currentTimeMillis())
-                .remove("claude_error_message")
-                .apply()
+            sessions.ifCurrent(session) {
+                prefs.edit()
+                    .putString("session_pct", sessionPct)
+                    .putString("session_reset", sessionReset)
+                    .putInt("session_prog", sessionProg)
+                    .putLong("session_reset_epoch_ms", sessionResetEpochMs)
+                    .putString("weekly_pct", weeklyPct)
+                    .putString("weekly_reset", weeklyReset)
+                    .putInt("weekly_prog", weeklyProg)
+                    .putLong("weekly_reset_epoch_ms", weeklyResetEpochMs)
+                    .putString("last_update", "Updated $updatedAt")
+                    .putString("updated_at", updatedAt)
+                    .putLong("last_successful_refresh_epoch_ms", System.currentTimeMillis())
+                    .remove("claude_error_message")
+                    .apply()
 
-            ClaudeWidgetProvider.updateAllWidgets(applicationContext)
-            QuotaNotifications.updateService(applicationContext, "claude")
-            AppLog.i(applicationContext, "Claude", "Updated: session $sessionPct, weekly $weeklyPct")
+                ClaudeWidgetProvider.updateAllWidgets(applicationContext)
+                QuotaNotifications.updateService(applicationContext, "claude")
+                AppLog.i(applicationContext, "Claude", "Updated: session $sessionPct, weekly $weeklyPct")
+            }
             return Outcome.UPDATED
 
         } catch (e: IOException) {
@@ -465,14 +480,15 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
         cookies: String?
     ): Outcome {
         var currentToken = token
-        val chatGptUa = prefs.getString("chatgpt_user_agent", defaultUa) ?: defaultUa
+        val session = chatGptSession ?: return Outcome.UPDATED
+        val chatGptUa = session.userAgent ?: defaultUa
 
         try {
             // If no token or we have cookies, try fetching/refreshing token
             if (currentToken.isNullOrEmpty() && !cookies.isNullOrEmpty()) {
                 currentToken = refreshChatGptToken(client, cookies, chatGptUa)
                 if (!currentToken.isNullOrEmpty()) {
-                    prefs.edit().putString("chatgpt_access_token", currentToken).apply()
+                    if (!sessions.updateToken(session, currentToken)) return Outcome.UPDATED
                 }
             }
 
@@ -488,17 +504,20 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
             // If 401 and we have cookies, attempt token refresh once
             if (usageResponse.code == 401 && !cookies.isNullOrEmpty()) {
                 AppLog.i(applicationContext, "ChatGPT", "Access token rejected (HTTP 401), getting a new one")
+                usageResponse.close()
                 val refreshedToken = refreshChatGptToken(client, cookies, chatGptUa)
                 if (!refreshedToken.isNullOrEmpty()) {
-                    usageResponse.close()
                     currentToken = refreshedToken
-                    prefs.edit().putString("chatgpt_access_token", refreshedToken).apply()
+                    if (!sessions.updateToken(session, refreshedToken)) return Outcome.UPDATED
                     usageRequest = buildChatGptRequest(currentToken, chatGptUa, cookies)
                     usageResponse = client.newCall(usageRequest).execute()
+                } else {
+                    setChatGptErrorState("Session expired — tap to log in", "Saved session could not refresh the access token")
+                    return Outcome.FAILED
                 }
             }
 
-            val body = usageResponse.body?.string()
+            val body = usageResponse.use { SessionHttp.readBody(it) }
             if (usageResponse.code == 401 || usageResponse.code == 403) {
                 setChatGptErrorState("Session expired — tap to log in",
                     "Usage request rejected (${httpSummary(usageResponse.code, body)})")
@@ -558,24 +577,26 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
             }
 
             val updatedAt = nowTimestamp()
-            prefs.edit()
-                .putString("chatgpt_session_pct", sessionPct)
-                .putString("chatgpt_session_reset", sessionReset)
-                .putInt("chatgpt_session_prog", sessionProg)
-                .putLong("chatgpt_session_reset_epoch_ms", sessionResetEpochMs)
-                .putString("chatgpt_weekly_pct", weeklyPct)
-                .putString("chatgpt_weekly_reset", weeklyReset)
-                .putInt("chatgpt_weekly_prog", weeklyProg)
-                .putLong("chatgpt_weekly_reset_epoch_ms", weeklyResetEpochMs)
-                .putString("chatgpt_last_update", "Updated $updatedAt")
-                .putString("chatgpt_updated_at", updatedAt)
-                .putLong("last_successful_refresh_epoch_ms", System.currentTimeMillis())
-                .remove("chatgpt_error_message")
-                .apply()
+            sessions.ifCurrent(session) {
+                prefs.edit()
+                    .putString("chatgpt_session_pct", sessionPct)
+                    .putString("chatgpt_session_reset", sessionReset)
+                    .putInt("chatgpt_session_prog", sessionProg)
+                    .putLong("chatgpt_session_reset_epoch_ms", sessionResetEpochMs)
+                    .putString("chatgpt_weekly_pct", weeklyPct)
+                    .putString("chatgpt_weekly_reset", weeklyReset)
+                    .putInt("chatgpt_weekly_prog", weeklyProg)
+                    .putLong("chatgpt_weekly_reset_epoch_ms", weeklyResetEpochMs)
+                    .putString("chatgpt_last_update", "Updated $updatedAt")
+                    .putString("chatgpt_updated_at", updatedAt)
+                    .putLong("last_successful_refresh_epoch_ms", System.currentTimeMillis())
+                    .remove("chatgpt_error_message")
+                    .apply()
 
-            ChatGptWidgetProvider.updateAllWidgets(applicationContext)
-            QuotaNotifications.updateService(applicationContext, "chatgpt")
-            AppLog.i(applicationContext, "ChatGPT", "Updated: session $sessionPct, weekly $weeklyPct")
+                ChatGptWidgetProvider.updateAllWidgets(applicationContext)
+                QuotaNotifications.updateService(applicationContext, "chatgpt")
+                AppLog.i(applicationContext, "ChatGPT", "Updated: session $sessionPct, weekly $weeklyPct")
+            }
             return Outcome.UPDATED
 
         } catch (e: IOException) {
@@ -606,19 +627,11 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
      */
     private fun refreshChatGptToken(client: OkHttpClient, cookies: String, ua: String): String? {
         try {
-            val sessionReq = Request.Builder()
-                .url("https://chatgpt.com/api/auth/session")
-                .header("Cookie", cookies)
-                .header("User-Agent", ua)
-                .header("Accept", "application/json")
-                .header("Referer", "https://chatgpt.com/")
-                .build()
-            val resp = client.newCall(sessionReq).execute()
-            val body = resp.body?.string()
+            SessionHttp.chatGptSessionCall(client, cookies, ua).execute().use { resp ->
+            val body = SessionHttp.readBody(resp)
             if (resp.isSuccessful && !body.isNullOrEmpty()) {
-                val json = JSONObject(body)
-                val token = json.optString("accessToken", "")
-                if (token.isNotEmpty()) {
+                val token = SessionHttp.accessToken(body)
+                if (token != null) {
                     AppLog.i(applicationContext, "ChatGPT", "Got a new access token from the saved session")
                     return token
                 }
@@ -626,6 +639,7 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
                 AppLog.w(applicationContext, "ChatGPT", "Saved session has no access token (logged out or expired)")
             } else {
                 AppLog.w(applicationContext, "ChatGPT", "Session request failed (${httpSummary(resp.code, body)})")
+            }
             }
         } catch (e: JSONException) {
             AppLog.w(applicationContext, "ChatGPT", "Session request failed", e)

@@ -7,13 +7,11 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
 import android.widget.RemoteViews
 
 class ClaudeWidgetProvider : AppWidgetProvider() {
 
     companion object {
-        private const val TAG = "ClaudeWidget"
         const val ACTION_REFRESH = "com.example.claudewidget.ACTION_REFRESH"
 
         fun updateAllWidgets(context: Context) {
@@ -35,8 +33,9 @@ class ClaudeWidgetProvider : AppWidgetProvider() {
             val prefs = context.getSharedPreferences("ClaudeWidgetPrefs", Context.MODE_PRIVATE)
 
             // ---- Refresh button ----
-            val refreshIntent = Intent(context, ClaudeWidgetProvider::class.java).apply {
-                action = ACTION_REFRESH
+            val refreshIntent = Intent(context, QuotaNotificationReceiver::class.java).apply {
+                action = QuotaNotifications.ACTION_REFRESH
+                putExtra(QuotaNotifications.EXTRA_SERVICE, "claude")
             }
             val refreshPending = PendingIntent.getBroadcast(
                 context, 0, refreshIntent,
@@ -57,8 +56,9 @@ class ClaudeWidgetProvider : AppWidgetProvider() {
                 views.setOnClickPendingIntent(R.id.widget_root, openAppPending)
             } else {
                 // Refresh on body tap
-                val refreshIntent2 = Intent(context, ClaudeWidgetProvider::class.java).apply {
-                    action = ACTION_REFRESH
+                val refreshIntent2 = Intent(context, QuotaNotificationReceiver::class.java).apply {
+                    action = QuotaNotifications.ACTION_REFRESH
+                    putExtra(QuotaNotifications.EXTRA_SERVICE, "claude")
                 }
                 val refreshPending2 = PendingIntent.getBroadcast(
                     context, 2, refreshIntent2,
@@ -96,8 +96,9 @@ class ClaudeWidgetProvider : AppWidgetProvider() {
                 val views = RemoteViews(context.packageName, layoutId)
 
                 // Keep click handlers
-                val refreshIntent = Intent(context, ClaudeWidgetProvider::class.java).apply {
-                    action = ACTION_REFRESH
+                val refreshIntent = Intent(context, QuotaNotificationReceiver::class.java).apply {
+                    action = QuotaNotifications.ACTION_REFRESH
+                    putExtra(QuotaNotifications.EXTRA_SERVICE, "claude")
                 }
                 views.setOnClickPendingIntent(R.id.btn_refresh, PendingIntent.getBroadcast(
                     context, 0, refreshIntent,
@@ -113,8 +114,9 @@ class ClaudeWidgetProvider : AppWidgetProvider() {
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     ))
                 } else {
-                    val refreshIntent2 = Intent(context, ClaudeWidgetProvider::class.java).apply {
-                        action = ACTION_REFRESH
+                    val refreshIntent2 = Intent(context, QuotaNotificationReceiver::class.java).apply {
+                        action = QuotaNotifications.ACTION_REFRESH
+                        putExtra(QuotaNotifications.EXTRA_SERVICE, "claude")
                     }
                     views.setOnClickPendingIntent(R.id.widget_root, PendingIntent.getBroadcast(
                         context, 2, refreshIntent2,
@@ -141,16 +143,4 @@ class ClaudeWidgetProvider : AppWidgetProvider() {
         updateAppWidget(context, appWidgetManager, appWidgetId)
     }
 
-    override fun onReceive(context: Context, intent: Intent) {
-        super.onReceive(context, intent)
-        if (intent.action == ACTION_REFRESH) {
-            Log.d(TAG, "Refresh button tapped!")
-            // Manual refresh starts immediately. Do not gate this on Android's network-validation
-            // state because it can lag behind a usable cellular connection during Wi-Fi handoff.
-            val status = "Refreshing..."
-            showRefreshingState(context, status)
-            ChatGptWidgetProvider.showRefreshingState(context, status)
-            UpdateWidgetWorker.runNow(context)
-        }
-    }
 }

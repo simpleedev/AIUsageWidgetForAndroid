@@ -7,13 +7,11 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
 import android.widget.RemoteViews
 
 class ChatGptWidgetProvider : AppWidgetProvider() {
 
     companion object {
-        private const val TAG = "ChatGptWidget"
         const val ACTION_REFRESH_CHATGPT = "com.example.claudewidget.ACTION_REFRESH_CHATGPT"
 
         fun updateAllWidgets(context: Context) {
@@ -35,8 +33,9 @@ class ChatGptWidgetProvider : AppWidgetProvider() {
             val prefs = context.getSharedPreferences("ClaudeWidgetPrefs", Context.MODE_PRIVATE)
 
             // ---- Refresh button ----
-            val refreshIntent = Intent(context, ChatGptWidgetProvider::class.java).apply {
-                action = ACTION_REFRESH_CHATGPT
+            val refreshIntent = Intent(context, QuotaNotificationReceiver::class.java).apply {
+                action = QuotaNotifications.ACTION_REFRESH
+                putExtra(QuotaNotifications.EXTRA_SERVICE, "chatgpt")
             }
             val refreshPending = PendingIntent.getBroadcast(
                 context, 10, refreshIntent,
@@ -57,8 +56,9 @@ class ChatGptWidgetProvider : AppWidgetProvider() {
                 views.setOnClickPendingIntent(R.id.widget_root, openAppPending)
             } else {
                 // Refresh on body tap
-                val refreshIntent2 = Intent(context, ChatGptWidgetProvider::class.java).apply {
-                    action = ACTION_REFRESH_CHATGPT
+                val refreshIntent2 = Intent(context, QuotaNotificationReceiver::class.java).apply {
+                    action = QuotaNotifications.ACTION_REFRESH
+                    putExtra(QuotaNotifications.EXTRA_SERVICE, "chatgpt")
                 }
                 val refreshPending2 = PendingIntent.getBroadcast(
                     context, 12, refreshIntent2,
@@ -96,8 +96,9 @@ class ChatGptWidgetProvider : AppWidgetProvider() {
                 val views = RemoteViews(context.packageName, layoutId)
 
                 // Keep click handlers
-                val refreshIntent = Intent(context, ChatGptWidgetProvider::class.java).apply {
-                    action = ACTION_REFRESH_CHATGPT
+                val refreshIntent = Intent(context, QuotaNotificationReceiver::class.java).apply {
+                    action = QuotaNotifications.ACTION_REFRESH
+                    putExtra(QuotaNotifications.EXTRA_SERVICE, "chatgpt")
                 }
                 views.setOnClickPendingIntent(R.id.btn_refresh, PendingIntent.getBroadcast(
                     context, 10, refreshIntent,
@@ -113,8 +114,9 @@ class ChatGptWidgetProvider : AppWidgetProvider() {
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     ))
                 } else {
-                    val refreshIntent2 = Intent(context, ChatGptWidgetProvider::class.java).apply {
-                        action = ACTION_REFRESH_CHATGPT
+                    val refreshIntent2 = Intent(context, QuotaNotificationReceiver::class.java).apply {
+                        action = QuotaNotifications.ACTION_REFRESH
+                        putExtra(QuotaNotifications.EXTRA_SERVICE, "chatgpt")
                     }
                     views.setOnClickPendingIntent(R.id.widget_root, PendingIntent.getBroadcast(
                         context, 12, refreshIntent2,
@@ -140,16 +142,4 @@ class ChatGptWidgetProvider : AppWidgetProvider() {
         updateAppWidget(context, appWidgetManager, appWidgetId)
     }
 
-    override fun onReceive(context: Context, intent: Intent) {
-        super.onReceive(context, intent)
-        if (intent.action == ACTION_REFRESH_CHATGPT) {
-            Log.d(TAG, "ChatGPT Refresh tapped!")
-            // Manual refresh starts immediately. Do not gate this on Android's network-validation
-            // state because it can lag behind a usable cellular connection during Wi-Fi handoff.
-            val status = "Refreshing..."
-            showRefreshingState(context, status)
-            ClaudeWidgetProvider.showRefreshingState(context, status)
-            UpdateWidgetWorker.runNowChatGpt(context)
-        }
-    }
 }

@@ -5,17 +5,16 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.content.SharedPreferences
 import android.content.res.ColorStateList
 import android.graphics.Typeface
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.Message
-import android.util.Log
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
@@ -27,7 +26,6 @@ import android.widget.TextView
 import android.widget.Toast
 import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
-import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -38,6 +36,11 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.Response
+import java.io.ByteArrayInputStream
+import java.io.IOException
 
 class MainActivity : AppCompatActivity() {
 
@@ -57,6 +60,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private lateinit var sharedPrefs: SharedPreferences
+    private val sessions by lazy { SessionStore.get(this) }
+    private val loginClient by lazy { SessionHttp.client() }
     private lateinit var claudeBrowser: LoginBrowser
     private lateinit var chatGptBrowser: LoginBrowser
 
@@ -80,6 +85,9 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         sharedPrefs = getSharedPreferences("ClaudeWidgetPrefs", Context.MODE_PRIVATE)
+        // The worker uses the encrypted copy. Remove leftover service sessions from the browser.
+        if (sessions.isLoggedIn("claude")) clearSiteData("claude")
+        if (sessions.isLoggedIn("chatgpt")) clearSiteData("chatgpt")
         QuotaNotifications.restoreEnabled(this)
 
         // Keep the periodic refresh on the current request (constraints, backoff) after an update.
@@ -88,8 +96,7 @@ class MainActivity : AppCompatActivity() {
             UpdateWidgetWorker.schedulePeriodic(this)
         }
 
-        // Enable WebView debugging for Chrome DevTools
-        WebView.setWebContentsDebuggingEnabled(true)
+        WebView.setWebContentsDebuggingEnabled(applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0)
         CookieManager.getInstance().setAcceptCookie(true)
 
         claudeBrowser = LoginBrowser("claude", findViewById(R.id.browser_claude), findViewById(R.id.webView_claude))
@@ -142,13 +149,11 @@ class MainActivity : AppCompatActivity() {
     private fun browserFor(service: String) = if (service == "chatgpt") chatGptBrowser else claudeBrowser
 
     private fun isClaudeLoggedIn(): Boolean {
-        return !sharedPrefs.getString("saved_cookies", null).isNullOrEmpty()
+        return sessions.isLoggedIn("claude")
     }
 
     private fun isChatGptLoggedIn(): Boolean {
-        val token = sharedPrefs.getString("chatgpt_access_token", null)
-        val cookies = sharedPrefs.getString("chatgpt_saved_cookies", null)
-        return !token.isNullOrEmpty() || !cookies.isNullOrEmpty()
+        return sessions.isLoggedIn("chatgpt")
     }
 
     private fun isLoggedIn(service: String) = if (service == "chatgpt") isChatGptLoggedIn() else isClaudeLoggedIn()
@@ -316,23 +321,34 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** Forgets the session the widget uses for [service]. The other service is untouched. */
-    private fun clearSavedSession(service: String) {
-        val editor = sharedPrefs.edit()
-        if (service == "claude") {
-            editor.remove("saved_cookies").remove("user_agent")
-        } else {
-            editor.remove("chatgpt_access_token").remove("chatgpt_saved_cookies").remove("chatgpt_user_agent")
+    private fun clearSavedSession(service: String): Boolean {
+        try {
+            sessions.clear(service)
+        } catch (e: Exception) {
+            AppLog.e(this, "Security", "Unable to remove saved sign-in", e)
+            Toast.makeText(this, "Unable to remove saved sign-in. Please try again.", Toast.LENGTH_LONG).show()
+            return false
         }
-        editor.apply()
+        val prefix = keyPrefix(service)
+        sharedPrefs.edit().apply {
+            listOf("session_pct", "session_reset", "session_prog", "session_reset_epoch_ms",
+                "weekly_pct", "weekly_reset", "weekly_prog", "weekly_reset_epoch_ms", "last_update", "updated_at")
+                .forEach { remove("$prefix$it") }
+            remove(if (service == "claude") "claude_error_message" else "chatgpt_error_message")
+        }.apply()
         QuotaNotifications.cancel(this, service)
+        updateWidgetsFor(service)
+        return true
     }
 
     /** Deletes [service]'s cookies and web storage, leaving the other service and the Google sign-in alone. */
     private fun clearSiteData(service: String) {
         if (service == "claude") {
             clearSiteData(
-                urls = listOf("https://claude.ai", "https://claude.ai/", "https://api.claude.ai", "https://anthropic.com"),
-                domains = listOf("claude.ai", ".claude.ai", "anthropic.com", ".anthropic.com"),
+                urls = listOf("https://claude.ai", "https://claude.ai/", "https://api.claude.ai", "https://anthropic.com",
+                    "https://auth.claude.ai", "https://console.anthropic.com", "https://platform.claude.com"),
+                domains = listOf("claude.ai", ".claude.ai", "api.claude.ai", "auth.claude.ai", "anthropic.com", ".anthropic.com",
+                    "console.anthropic.com", "platform.claude.com", ".claude.com"),
                 knownNames = setOf(
                     "sessionKey",
                     "cf_clearance",
@@ -344,12 +360,15 @@ class MainActivity : AppCompatActivity() {
                     "intercom-id",
                     "intercom-session"
                 ),
-                origins = listOf("https://claude.ai", "https://api.claude.ai", "https://anthropic.com")
+                origins = listOf("https://claude.ai", "https://api.claude.ai", "https://anthropic.com", "https://auth.claude.ai",
+                    "https://console.anthropic.com", "https://platform.claude.com")
             )
         } else {
             clearSiteData(
-                urls = listOf("https://chatgpt.com", "https://chatgpt.com/", "https://oaistatic.com", "https://openai.com"),
-                domains = listOf("chatgpt.com", ".chatgpt.com", "oaistatic.com", ".oaistatic.com", "openai.com", ".openai.com"),
+                urls = listOf("https://chatgpt.com", "https://chatgpt.com/", "https://oaistatic.com", "https://openai.com",
+                    "https://auth.openai.com", "https://auth0.openai.com"),
+                domains = listOf("chatgpt.com", ".chatgpt.com", "oaistatic.com", ".oaistatic.com", "openai.com", ".openai.com",
+                    "auth.openai.com", "auth0.openai.com"),
                 knownNames = setOf(
                     "__Secure-next-auth.session-token",
                     "next-auth.session-token",
@@ -359,7 +378,7 @@ class MainActivity : AppCompatActivity() {
                     "oai-did",
                     "oai-nav-state"
                 ),
-                origins = listOf("https://chatgpt.com", "https://openai.com")
+                origins = listOf("https://chatgpt.com", "https://openai.com", "https://auth.openai.com", "https://auth0.openai.com")
             )
         }
     }
@@ -396,7 +415,7 @@ class MainActivity : AppCompatActivity() {
             val webStorage = WebStorage.getInstance()
             origins.forEach { webStorage.deleteOrigin(it) }
         } catch (e: Exception) {
-            Log.w("ClaudeWidget", "Failed to clear web storage for $origins", e)
+            AppLog.w(this, "Browser", "Failed to clear web storage", e)
         }
 
         cookieManager.flush()
@@ -546,7 +565,7 @@ class MainActivity : AppCompatActivity() {
 
         // ---- Re-login button (clears this service's session only, preserves Google account) ----
         findViewById<View>(R.id.btn_relogin).setOnClickListener {
-            clearSavedSession(service)
+            if (!clearSavedSession(service)) return@setOnClickListener
             clearSiteData(service)
             AppLog.i(this, serviceName(service), "Re-login: cleared the saved session")
             showLoginScreen(restart = true)
@@ -556,7 +575,7 @@ class MainActivity : AppCompatActivity() {
         val fullLogoutBtn = findViewById<TextView>(R.id.btn_full_logout)
         fullLogoutBtn.text = "Log out of ${serviceName(service)} completely (clear Google session)"
         fullLogoutBtn.setOnClickListener {
-            clearSavedSession(service)
+            if (!clearSavedSession(service)) return@setOnClickListener
             clearSiteData(service)
             AppLog.i(this, serviceName(service), "Full logout: cleared the saved session and all cookies")
             // Clearing the Google sign-in reliably takes removing every cookie. The other service stays
@@ -564,6 +583,9 @@ class MainActivity : AppCompatActivity() {
             CookieManager.getInstance().removeAllCookies {
                 CookieManager.getInstance().flush()
                 runOnUiThread {
+                    WebStorage.getInstance().deleteAllData()
+                    claudeBrowser.webView.clearCache(true)
+                    chatGptBrowser.webView.clearCache(true)
                     if (currentTab == service) showLoginScreen(restart = true)
                 }
             }
@@ -585,6 +607,7 @@ class MainActivity : AppCompatActivity() {
             private set
 
         private var popup: WebView? = null
+        var sessionCall: Call? = null
         private var clearHistoryOnNextPage = false
 
         private val pollRunnable = object : Runnable {
@@ -600,19 +623,6 @@ class MainActivity : AppCompatActivity() {
             webView.settings.apply {
                 useWideViewPort = true
                 loadWithOverviewMode = true
-                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-            }
-
-            if (service == "chatgpt") {
-                // JS bridge for ChatGPT token extraction
-                webView.addJavascriptInterface(object {
-                    @JavascriptInterface
-                    fun onChatGptToken(token: String?) {
-                        if (!token.isNullOrEmpty()) {
-                            handleChatGptTokenReceived(token)
-                        }
-                    }
-                }, "AndroidBridge")
             }
 
             webView.webChromeClient = object : WebChromeClient() {
@@ -622,31 +632,26 @@ class MainActivity : AppCompatActivity() {
                     isUserGesture: Boolean,
                     resultMsg: Message?
                 ): Boolean {
+                    if (!isUserGesture || !loginInProgress || resultMsg == null) return false
                     openPopup(resultMsg)
                     return true
                 }
 
                 override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
-                    Log.d("ClaudeWidget", "$name JS Console: ${consoleMessage?.message()} -- line ${consoleMessage?.lineNumber()}")
-                    return super.onConsoleMessage(consoleMessage)
+                    // Webpage-controlled console output may contain credentials; never copy it to logs.
+                    return true
                 }
             }
 
             webView.webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean =
+                    request == null || LoginUrlPolicy.blocksNavigation(service, request.url.toString(), request.isForMainFrame)
+
                 override fun shouldInterceptRequest(
                     view: WebView?,
                     request: WebResourceRequest?
                 ): WebResourceResponse? {
-                    if (service == "chatgpt" && loginInProgress) {
-                        val urlStr = request?.url?.toString() ?: ""
-                        if (urlStr.contains("chatgpt.com")) {
-                            val auth = request?.requestHeaders?.get("Authorization")
-                                ?: request?.requestHeaders?.get("authorization")
-                            if (auth != null && auth.startsWith("Bearer ey")) {
-                                handleChatGptTokenReceived(auth.removePrefix("Bearer ").trim())
-                            }
-                        }
-                    }
+                    if (request != null && LoginUrlPolicy.blocksNavigation(service, request.url.toString(), request.isForMainFrame)) return blockedResource()
                     return super.shouldInterceptRequest(view, request)
                 }
 
@@ -669,7 +674,7 @@ class MainActivity : AppCompatActivity() {
                     super.onReceivedError(view, request, error)
                     if (request?.isForMainFrame == true && loginInProgress) {
                         AppLog.w(this@MainActivity, name,
-                            "Login page failed to load: ${error?.description} (${pageName(request.url)})")
+                            "Login page failed to load (code ${error?.errorCode})")
                     }
                 }
 
@@ -677,7 +682,7 @@ class MainActivity : AppCompatActivity() {
                     super.onReceivedHttpError(view, request, response)
                     if (request?.isForMainFrame == true && loginInProgress) {
                         AppLog.w(this@MainActivity, name,
-                            "Login page returned HTTP ${response?.statusCode} (${pageName(request.url)})")
+                            "Login page returned HTTP ${response?.statusCode}")
                     }
                 }
             }
@@ -686,6 +691,8 @@ class MainActivity : AppCompatActivity() {
         fun startLogin() {
             AppLog.i(this@MainActivity, name, "Opening the login page")
             loginInProgress = true
+            sessionCall?.cancel()
+            sessionCall = null
             clearHistoryOnNextPage = true
             closePopup()
             webView.loadUrl(loginUrl)
@@ -696,9 +703,12 @@ class MainActivity : AppCompatActivity() {
         /** Stops the login check and unloads the site, so its scripts don't keep running hidden. */
         fun finish() {
             loginInProgress = false
+            sessionCall?.cancel()
+            sessionCall = null
             loginCheckHandler.removeCallbacks(pollRunnable)
             closePopup()
             webView.stopLoading()
+            clearHistoryOnNextPage = true
             webView.loadUrl("about:blank")
         }
 
@@ -714,7 +724,7 @@ class MainActivity : AppCompatActivity() {
                 frame.removeView(view)
                 view.destroy()
             } catch (e: Exception) {
-                Log.w("ClaudeWidget", "Error removing $name popup WebView", e)
+                AppLog.w(this@MainActivity, name, "Error removing popup WebView", e)
             }
             return true
         }
@@ -727,11 +737,20 @@ class MainActivity : AppCompatActivity() {
             applyBrowserSettings(newWebView)
 
             newWebView.webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean = true
                 override fun onCloseWindow(window: WebView?) {
                     if (window === popup) closePopup()
                 }
             }
-            newWebView.webViewClient = WebViewClient()
+            newWebView.webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean =
+                    request == null || LoginUrlPolicy.blocksNavigation(service, request.url.toString(), request.isForMainFrame)
+
+                override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                    if (request != null && LoginUrlPolicy.blocksNavigation(service, request.url.toString(), request.isForMainFrame)) return blockedResource()
+                    return null
+                }
+            }
 
             frame.addView(newWebView, FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -751,7 +770,15 @@ class MainActivity : AppCompatActivity() {
             domStorageEnabled = true
             databaseEnabled = true
             setSupportMultipleWindows(true)
-            javaScriptCanOpenWindowsAutomatically = true
+            javaScriptCanOpenWindowsAutomatically = false
+            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            allowFileAccess = false
+            allowContentAccess = false
+            @Suppress("DEPRECATION")
+            allowFileAccessFromFileURLs = false
+            @Suppress("DEPRECATION")
+            allowUniversalAccessFromFileURLs = false
+            safeBrowsingEnabled = true
 
             val defaultAgent = userAgentString
             userAgentString = defaultAgent.replace("; wv", "")
@@ -760,8 +787,8 @@ class MainActivity : AppCompatActivity() {
         CookieManager.getInstance().setAcceptThirdPartyCookies(view, true)
     }
 
-    /** Host and path only: login URLs can carry one-time codes in the query string. */
-    private fun pageName(url: Uri?) = "${url?.host}${url?.path}"
+    private fun blockedResource() = WebResourceResponse(
+        "text/plain", "UTF-8", 403, "Blocked", emptyMap(), ByteArrayInputStream(ByteArray(0)))
 
     private fun hasValidClaudeSessionKey(cookies: String?): Boolean {
         if (cookies.isNullOrEmpty()) return false
@@ -776,58 +803,57 @@ class MainActivity : AppCompatActivity() {
         val cookies = CookieManager.getInstance().getCookie("https://claude.ai")
         if (hasValidClaudeSessionKey(cookies)) {
             val userAgent = browser.webView.settings.userAgentString
-            completeLogin(browser) {
-                putString("saved_cookies", cookies)
-                putString("user_agent", userAgent)
-            }
+            completeLogin(browser, cookies, null, userAgent)
         }
     }
 
     private fun attemptChatGptSessionExtraction(browser: LoginBrowser) {
-        if (!browser.loginInProgress) return
-        browser.webView.evaluateJavascript("""
-            (function() {
-                try {
-                    fetch('/api/auth/session')
-                        .then(function(r) { return r.json(); })
-                        .then(function(d) {
-                            if (d && d.accessToken) {
-                                window.AndroidBridge.onChatGptToken(d.accessToken);
-                            }
-                        })
-                        .catch(function(e) {});
-                } catch(e) {}
-            })();
-        """.trimIndent(), null)
-    }
-
-    private fun handleChatGptTokenReceived(token: String) {
-        if (token.length < 20) return
-
-        // Called from the JS bridge and shouldInterceptRequest, which both run off the main
-        // thread. WebView methods throw there, so do everything on the UI thread.
-        runOnUiThread {
-            if (!chatGptBrowser.loginInProgress) return@runOnUiThread
-            val cookies = CookieManager.getInstance().getCookie("https://chatgpt.com")
-            val userAgent = chatGptBrowser.webView.settings.userAgentString
-            completeLogin(chatGptBrowser) {
-                putString("chatgpt_access_token", token)
-                putString("chatgpt_saved_cookies", cookies)
-                putString("chatgpt_user_agent", userAgent)
+        if (!browser.loginInProgress || browser.sessionCall != null ||
+            !LoginUrlPolicy.isServiceOrigin("chatgpt", browser.webView.url)) return
+        val cookies = CookieManager.getInstance().getCookie("https://chatgpt.com") ?: return
+        val userAgent = browser.webView.settings.userAgentString
+        val call = SessionHttp.chatGptSessionCall(loginClient, cookies, userAgent)
+        browser.sessionCall = call
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) = completed(call, null)
+            override fun onResponse(call: Call, response: Response) {
+                val token = response.use {
+                    try { if (it.isSuccessful) SessionHttp.accessToken(SessionHttp.readBody(it)) else null }
+                    catch (_: Exception) { null }
+                }
+                completed(call, token)
             }
-        }
+            private fun completed(call: Call, token: String?) {
+                runOnUiThread {
+                    if (browser.sessionCall !== call) return@runOnUiThread
+                    browser.sessionCall = null
+                    if (browser.loginInProgress && !call.isCanceled() && token != null) {
+                        completeLogin(browser, cookies, token, userAgent)
+                    }
+                }
+            }
+        })
     }
 
     /**
      * Saves a detected login and starts a refresh. Also drops the service's last error, so the new login
      * doesn't show as failed (on the widget or the Connected screen) before that refresh finishes.
      */
-    private fun completeLogin(browser: LoginBrowser, save: SharedPreferences.Editor.() -> Unit) {
+    private fun completeLogin(browser: LoginBrowser, cookies: String?, token: String?, userAgent: String) {
+        try {
+            sessions.save(browser.service, cookies, token, userAgent)
+        } catch (e: Exception) {
+            AppLog.e(this, "Security", "Unable to securely save sign-in", e)
+            browser.finish()
+            Toast.makeText(this, "Unable to securely save sign-in. Please try again.", Toast.LENGTH_LONG).show()
+            return
+        }
         browser.finish()
+        clearSiteData(browser.service)
+        browser.webView.clearCache(true)
 
         val prefix = keyPrefix(browser.service)
         val editor = sharedPrefs.edit()
-        editor.save()
         if (sharedPrefs.getString("${prefix}session_pct", null) == "Error") {
             editor.remove("${prefix}session_pct")
                 .remove("${prefix}session_reset")
@@ -907,8 +933,10 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         loginCheckHandler.removeCallbacksAndMessages(null)
-        claudeBrowser.closePopup()
-        chatGptBrowser.closePopup()
+        claudeBrowser.finish()
+        chatGptBrowser.finish()
+        claudeBrowser.webView.destroy()
+        chatGptBrowser.webView.destroy()
     }
 
     @Deprecated("Deprecated in Java")

@@ -32,6 +32,7 @@ android {
         versionCode = 22
         versionName = "1.1.9"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        resValue("string", "app_name", "AI Usage Widget")
     }
 
     signingConfigs {
@@ -50,6 +51,7 @@ android {
         debug {
             // Security instrumentation uses a separate install, never replacing the user's signed app.
             applicationIdSuffix = ".securitytest"
+            resValue("string", "app_name", "AI Usage Widget Security Test")
         }
         release {
             isMinifyEnabled = false

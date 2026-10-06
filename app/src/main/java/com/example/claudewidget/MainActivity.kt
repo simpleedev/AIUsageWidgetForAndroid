@@ -10,13 +10,11 @@ import android.content.pm.PackageManager
 import android.content.SharedPreferences
 import android.content.res.ColorStateList
 import android.graphics.Typeface
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.Message
-import android.util.Log
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
@@ -417,7 +415,7 @@ class MainActivity : AppCompatActivity() {
             val webStorage = WebStorage.getInstance()
             origins.forEach { webStorage.deleteOrigin(it) }
         } catch (e: Exception) {
-            Log.w("ClaudeWidget", "Failed to clear web storage for $origins", e)
+            AppLog.w(this, "Browser", "Failed to clear web storage", e)
         }
 
         cookieManager.flush()
@@ -647,14 +645,13 @@ class MainActivity : AppCompatActivity() {
 
             webView.webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean =
-                    request == null || !LoginUrlPolicy.allows(service, request.url.toString())
+                    request == null || LoginUrlPolicy.blocksNavigation(service, request.url.toString(), request.isForMainFrame)
 
                 override fun shouldInterceptRequest(
                     view: WebView?,
                     request: WebResourceRequest?
                 ): WebResourceResponse? {
-                    if (request != null && (!LoginUrlPolicy.isHttpsResource(request.url.toString()) ||
-                        (request.isForMainFrame && !LoginUrlPolicy.allows(service, request.url.toString())))) return blockedResource()
+                    if (request != null && LoginUrlPolicy.blocksNavigation(service, request.url.toString(), request.isForMainFrame)) return blockedResource()
                     return super.shouldInterceptRequest(view, request)
                 }
 
@@ -727,7 +724,7 @@ class MainActivity : AppCompatActivity() {
                 frame.removeView(view)
                 view.destroy()
             } catch (e: Exception) {
-                Log.w("ClaudeWidget", "Error removing $name popup WebView", e)
+                AppLog.w(this@MainActivity, name, "Error removing popup WebView", e)
             }
             return true
         }
@@ -747,11 +744,10 @@ class MainActivity : AppCompatActivity() {
             }
             newWebView.webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean =
-                    request == null || !LoginUrlPolicy.allows(service, request.url.toString())
+                    request == null || LoginUrlPolicy.blocksNavigation(service, request.url.toString(), request.isForMainFrame)
 
                 override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
-                    if (request != null && (!LoginUrlPolicy.isHttpsResource(request.url.toString()) ||
-                        (request.isForMainFrame && !LoginUrlPolicy.allows(service, request.url.toString())))) return blockedResource()
+                    if (request != null && LoginUrlPolicy.blocksNavigation(service, request.url.toString(), request.isForMainFrame)) return blockedResource()
                     return null
                 }
             }

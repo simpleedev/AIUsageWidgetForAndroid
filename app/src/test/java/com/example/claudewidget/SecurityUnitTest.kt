@@ -27,6 +27,15 @@ class SecurityUnitTest {
         assertTrue(LoginUrlPolicy.isServiceOrigin("chatgpt", "https://CHATGPT.COM/"))
     }
 
+    @Test fun verificationFramesRetainOriginIsolationWithoutExpandingMainNavigation() {
+        val verification = "https://challenges.cloudflare.com/verification"
+        assertFalse(LoginUrlPolicy.blocksNavigation("chatgpt", verification, false))
+        assertTrue(LoginUrlPolicy.blocksNavigation("chatgpt", verification, true))
+        assertTrue(LoginUrlPolicy.blocksNavigation("chatgpt", "http://challenges.cloudflare.com/", false))
+        assertTrue(LoginUrlPolicy.blocksNavigation("claude", "file:///sdcard/example", false))
+        assertFalse(LoginUrlPolicy.blocksNavigation("claude", "about:blank", true))
+    }
+
     @Test fun encryptionRoundTripUsesFreshNonces() {
         val key = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
         val cipher = SessionCipher { key }

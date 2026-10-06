@@ -22,6 +22,13 @@ object LoginUrlPolicy {
 
     fun isHttpsResource(url: String): Boolean = parseHttps(url) != null
 
+    fun blocksNavigation(service: String, url: String, isMainFrame: Boolean): Boolean {
+        if (url == "about:blank") return false
+        // HTTPS verification/CDN frames retain browser origin isolation; only top-level pages
+        // require the authentication-host list. There is no native bridge in any frame.
+        return !isHttpsResource(url) || (isMainFrame && !allows(service, url))
+    }
+
     private fun parseHttps(url: String): URI? = try {
         URI(url).takeIf { it.scheme.equals("https", true) && !it.host.isNullOrEmpty() &&
             it.rawUserInfo == null && (it.port == -1 || it.port == 443) }

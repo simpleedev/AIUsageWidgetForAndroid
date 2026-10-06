@@ -77,7 +77,7 @@ object QuotaNotifications {
         if (!canPostNotifications(context)) return
 
         val prefs = prefs(context)
-        if (!isLoggedIn(prefs, service)) {
+        if (!SessionStore.get(context).isLoggedIn(service)) {
             cancel(context, service)
             return
         }
@@ -124,7 +124,7 @@ object QuotaNotifications {
     fun showRefreshing(context: Context, service: String) {
         if (!isEnabled(context, service) || !canPostNotifications(context)) return
         val prefs = prefs(context)
-        if (!isLoggedIn(prefs, service)) return
+        if (!SessionStore.get(context).isLoggedIn(service)) return
 
         ensureChannel(context)
         val name = if (service == "chatgpt") "ChatGPT" else "Claude"
@@ -205,7 +205,7 @@ object QuotaNotifications {
     private fun needsResetTimestamp(context: Context, service: String): Boolean {
         if (!isEnabled(context, service)) return false
         val prefs = prefs(context)
-        if (!isLoggedIn(prefs, service)) return false
+        if (!SessionStore.get(context).isLoggedIn(service)) return false
         val prefix = if (service == "chatgpt") "chatgpt_" else ""
         val weeklyUsed = prefs.getInt("${prefix}weekly_prog", 0)
         if (weeklyUsed < 100 && prefs.getString("${prefix}session_reset", null) == "Ready") return false
@@ -279,12 +279,4 @@ object QuotaNotifications {
     private fun prefs(context: Context) =
         context.getSharedPreferences("ClaudeWidgetPrefs", Context.MODE_PRIVATE)
 
-    private fun isLoggedIn(prefs: android.content.SharedPreferences, service: String): Boolean {
-        return if (service == "chatgpt") {
-            !prefs.getString("chatgpt_access_token", null).isNullOrEmpty() ||
-                !prefs.getString("chatgpt_saved_cookies", null).isNullOrEmpty()
-        } else {
-            !prefs.getString("saved_cookies", null).isNullOrEmpty()
-        }
-    }
 }

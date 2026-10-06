@@ -15,7 +15,10 @@ class QuotaNotificationReceiver : BroadcastReceiver() {
 
         when (intent.action) {
             QuotaNotifications.ACTION_REFRESH -> {
-                QuotaNotifications.showRefreshing(context, service)
+                ClaudeWidgetProvider.showRefreshingState(context)
+                ChatGptWidgetProvider.showRefreshingState(context)
+                QuotaNotifications.showRefreshing(context, "claude")
+                QuotaNotifications.showRefreshing(context, "chatgpt")
                 // Manual work intentionally runs immediately rather than waiting on WorkManager's
                 // network constraint, which can lag behind a Wi-Fi -> cellular handoff.
                 UpdateWidgetWorker.runNow(context)

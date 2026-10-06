@@ -29,8 +29,9 @@ android {
         applicationId = "dev.johngitdev.aiusagewidget"
         minSdk = 26
         targetSdk = 34
-        versionCode = 21
-        versionName = "1.1.8"
+        versionCode = 22
+        versionName = "1.1.9"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
@@ -46,6 +47,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Security instrumentation uses a separate install, never replacing the user's signed app.
+            applicationIdSuffix = ".securitytest"
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -68,4 +73,8 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.work:work-runtime-ktx:2.8.1")
     implementation("com.squareup.okhttp3:okhttp:4.11.0")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.11.0")
+    androidTestImplementation("androidx.test:runner:1.5.2")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
 }

@@ -26,11 +26,17 @@ Because this app requires you to log in to your Claude and/or ChatGPT account (w
 For normal installs and upgrades, use the APK attached to a GitHub release. Releases from
 1.0.9 onward use the same pinned signing key and install over each other normally.
 
-A locally built **debug** APK uses Android's debug key and cannot replace an installed release
-APK with the same application ID; Android reports that as a package conflict. To upgrade an
-installed 1.0.9+ build locally, build `assembleRelease` with the same release keystore by setting
+A locally built **debug** APK uses the separate `dev.johngitdev.aiusagewidget.securitytest`
+application ID and Android's debug key, so security tests can run beside an installed release
+without changing its accounts or settings. To upgrade an installed release, build `assembleRelease`
+with the same release keystore by setting
 `RELEASE_STORE_FILE`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, and
 `RELEASE_KEY_PASSWORD`. The build log prints whether release signing is enabled.
+
+From 1.1.9, saved sessions are encrypted using a device-bound Android Keystore key. App data is
+excluded from cloud backup and device transfers; a new phone or reinstall requires sign-in again.
+Existing installations migrate their saved sessions during an ordinary upgrade. Google sign-in
+still uses the embedded browser, with its compatibility and service-policy limitations.
 
 To work on the source locally:
 1. Clone this repository:

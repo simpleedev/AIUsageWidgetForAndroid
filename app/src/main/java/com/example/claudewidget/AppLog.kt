@@ -39,15 +39,17 @@ object AppLog {
     }
 
     private fun write(context: Context, level: String, tag: String, message: String, error: Throwable?) {
+        // Exception messages and stacks may embed request URLs or server response content.
+        val detail = error?.let { " (${it.javaClass.simpleName})" } ?: ""
+        val safeMessage = SafeDiagnostics.redact(message)
         when (level) {
-            "E" -> Log.e(tag, message, error)
-            "W" -> Log.w(tag, message, error)
-            else -> Log.i(tag, message)
+            "E" -> Log.e(tag, safeMessage + detail)
+            "W" -> Log.w(tag, safeMessage + detail)
+            else -> Log.i(tag, safeMessage + detail)
         }
 
-        val detail = error?.let { " (${it.javaClass.simpleName}: ${it.message})" } ?: ""
         val time = SimpleDateFormat("MM-dd HH:mm:ss", Locale.US).format(Date())
-        val line = "$time $level $tag: $message$detail\n"
+        val line = "$time $level $tag: $safeMessage$detail\n"
 
         try {
             synchronized(lock) {
@@ -60,7 +62,7 @@ object AppLog {
                 }
             }
         } catch (e: Exception) {
-            Log.w("AppLog", "Couldn't write to the log file", e)
+            Log.w("AppLog", "Couldn't write to the log file (${e.javaClass.simpleName})")
         }
     }
 

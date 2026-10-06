@@ -25,9 +25,9 @@ class AIUsageWidgetApplication : Application() {
             val prefs = getSharedPreferences("ClaudeWidgetPrefs", Context.MODE_PRIVATE)
             if (!prefs.getBoolean("refresh_on_screen_on", false)) return
 
-            val hasClaude = !prefs.getString("saved_cookies", null).isNullOrEmpty()
-            val hasChatGpt = !prefs.getString("chatgpt_access_token", null).isNullOrEmpty() ||
-                !prefs.getString("chatgpt_saved_cookies", null).isNullOrEmpty()
+            val sessions = SessionStore.get(context)
+            val hasClaude = sessions.isLoggedIn("claude")
+            val hasChatGpt = sessions.isLoggedIn("chatgpt")
             if (!hasClaude && !hasChatGpt) return
 
             val now = System.currentTimeMillis()
@@ -47,6 +47,16 @@ class AIUsageWidgetApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        val prefs = getSharedPreferences("ClaudeWidgetPrefs", Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("security_log_cleanup_v1", false)) {
+            AppLog.clear(this) // Logs from older versions may contain unredacted response snippets.
+            prefs.edit().putBoolean("security_log_cleanup_v1", true).apply()
+        }
+        SessionStore.get(this).snapshot("claude")
+        SessionStore.get(this).snapshot("chatgpt")
+        // Replace old exported refresh PendingIntents after an upgrade.
+        ClaudeWidgetProvider.updateAllWidgets(this)
+        ChatGptWidgetProvider.updateAllWidgets(this)
         // ACTION_SCREEN_ON is a protected system-only broadcast. Android 14's dynamic-receiver
         // export-flag requirement explicitly exempts receivers that listen only for system broadcasts.
         @Suppress("DEPRECATION")

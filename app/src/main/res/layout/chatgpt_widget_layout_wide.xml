@@ -18,33 +18,16 @@
             android:layout_width="24dp"
             android:layout_height="24dp"
             android:src="@drawable/ic_chatgpt" />
-        
-        <RelativeLayout
+        <TextView
             android:layout_width="0dp"
             android:layout_weight="1"
-            android:layout_height="wrap_content">
-            <TextView
-                android:id="@+id/tv_title"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="ChatGPT"
-                android:textStyle="bold"
-                android:textColor="#FFFFFF"
-                android:layout_marginStart="8dp"
-                android:textSize="18sp"
-                android:maxLines="1" />
-            <TextView
-                android:id="@+id/tv_last_update"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_toEndOf="@id/tv_title"
-                android:layout_alignBaseline="@id/tv_title"
-                android:text="- Not yet refreshed"
-                android:textColor="#FFFFFF"
-                android:layout_marginStart="6dp"
-                android:textSize="10sp"
-                android:maxLines="1"/>
-        </RelativeLayout>
+            android:layout_height="wrap_content"
+            android:text="ChatGPT"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:layout_marginStart="8dp"
+            android:textSize="18sp"
+            android:maxLines="1" />
 
         <ImageView
             android:id="@+id/btn_refresh"
@@ -52,6 +35,18 @@
             android:layout_height="24dp"
             android:src="@drawable/ic_refresh" />
     </LinearLayout>
+
+    <!-- Last updated timestamp, aligned under the title (24dp icon + 8dp gap) -->
+    <TextView
+        android:id="@+id/tv_last_update"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Not yet refreshed"
+        android:textColor="#FFFFFF"
+        android:layout_marginStart="32dp"
+        android:textSize="10sp"
+        android:maxLines="1"
+        android:ellipsize="end"/>
 
     <TextView
         android:layout_width="match_parent"

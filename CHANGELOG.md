@@ -17,6 +17,13 @@ signing certificate, so installing 1.0.9 over an older build fails until the old
 removed. Uninstalling clears app data, so you will need to sign in to Claude and ChatGPT
 again — once.
 
+## [1.2.0] - 2026-11-02
+
+### Changed
+- **The `Updated` timestamp now sits under the widget title in the wide layout.** It used to share
+  a line with the large `Claude` / `ChatGPT` title, and it got cut off when a 2x2 widget was wide
+  enough to switch to the wide layout. It now has its own line, lined up with the title.
+
 ## [1.1.9] - 2026-10-05
 
 ### Security
@@ -262,6 +269,9 @@ Updates after this one will not need any of that.
 
 Initial release.
 
+[1.2.0]: https://github.com/john-gitdev/AIUsageWidgetForAndroid/compare/v1.1.9...v1.2.0
+[1.1.9]: https://github.com/john-gitdev/AIUsageWidgetForAndroid/compare/v1.1.8...v1.1.9
+[1.1.8]: https://github.com/john-gitdev/AIUsageWidgetForAndroid/compare/v1.1.7...v1.1.8
 [1.1.7]: https://github.com/john-gitdev/AIUsageWidgetForAndroid/compare/v1.1.6...v1.1.7
 [1.1.6]: https://github.com/john-gitdev/AIUsageWidgetForAndroid/compare/v1.1.5...v1.1.6
 [1.1.5]: https://github.com/john-gitdev/AIUsageWidgetForAndroid/compare/v1.1.4...v1.1.5

@@ -17,6 +17,14 @@ signing certificate, so installing 1.0.9 over an older build fails until the old
 removed. Uninstalling clears app data, so you will need to sign in to Claude and ChatGPT
 again — once.
 
+## [1.2.1] - 2026-11-09
+
+### Fixed
+- Claude weekly usage now reads the all-models limit independently of model-specific limits.
+
+### Added
+- The Claude widget and quota notification show weekly Fable usage when Claude reports it.
+
 ## [1.2.0] - 2026-11-02
 
 ### Changed

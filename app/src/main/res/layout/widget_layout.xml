@@ -5,7 +5,8 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:gravity="center_vertical"
-    android:padding="12dp"
+    android:paddingHorizontal="12dp"
+    android:paddingVertical="2dp"
     android:background="@drawable/widget_bg">
 
     <!-- Header row -->
@@ -36,14 +37,14 @@
     </LinearLayout>
 
     <!-- Last updated timestamp -->
-        <TextView
+    <TextView
         android:id="@+id/tv_last_update"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Not yet refreshed"
         android:textColor="#FFFFFF"
         android:textSize="9sp"
-        android:layout_marginBottom="6dp"
+        android:includeFontPadding="false"
         android:maxLines="1"/>
 
     <!-- Session label row -->
@@ -59,6 +60,7 @@
             android:text="Session"
             android:textColor="#FFFFFF"
             android:textSize="11sp"
+            android:includeFontPadding="false"
             android:maxLines="1" />
         <TextView
             android:id="@+id/tv_session_pct"
@@ -68,6 +70,7 @@
             android:textStyle="bold"
             android:textColor="#FFFFFF"
             android:textSize="11sp"
+            android:includeFontPadding="false"
             android:maxLines="1" />
     </LinearLayout>
 
@@ -76,11 +79,10 @@
         android:id="@+id/pb_session"
         style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="match_parent"
-        android:layout_height="6dp"
+        android:layout_height="4dp"
         android:progressDrawable="@drawable/custom_progress_bar"
         android:max="100"
-        android:progress="0"
-        android:layout_marginTop="2dp"/>
+        android:progress="0"/>
 
     <!-- Session reset text -->
     <TextView
@@ -90,7 +92,8 @@
         android:text="Tap refresh"
         android:textColor="#FFFFFF"
         android:textSize="9sp"
-        android:layout_marginBottom="6dp"
+        android:layout_marginBottom="2dp"
+        android:includeFontPadding="false"
         android:maxLines="1"/>
 
     <!-- Weekly label row -->
@@ -106,6 +109,7 @@
             android:text="Weekly"
             android:textColor="#FFFFFF"
             android:textSize="11sp"
+            android:includeFontPadding="false"
             android:maxLines="1" />
         <TextView
             android:id="@+id/tv_weekly_pct"
@@ -115,6 +119,7 @@
             android:textStyle="bold"
             android:textColor="#FFFFFF"
             android:textSize="11sp"
+            android:includeFontPadding="false"
             android:maxLines="1" />
     </LinearLayout>
 
@@ -123,11 +128,10 @@
         android:id="@+id/pb_weekly"
         style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="match_parent"
-        android:layout_height="6dp"
+        android:layout_height="4dp"
         android:progressDrawable="@drawable/custom_progress_bar"
         android:max="100"
-        android:progress="0"
-        android:layout_marginTop="2dp"/>
+        android:progress="0"/>
 
     <!-- Weekly reset text -->
     <TextView
@@ -137,6 +141,9 @@
         android:text="Tap refresh"
         android:textColor="#FFFFFF"
         android:textSize="9sp"
+        android:includeFontPadding="false"
         android:maxLines="1"/>
+
+    <include layout="@layout/claude_fable_row" />
 
 </LinearLayout>

@@ -148,6 +148,8 @@
         android:layout_marginTop="2dp"
         android:maxLines="1"/>
 
+    <include layout="@layout/claude_fable_row" />
+
     <TextView
         android:layout_width="match_parent"
         android:layout_height="0dp"

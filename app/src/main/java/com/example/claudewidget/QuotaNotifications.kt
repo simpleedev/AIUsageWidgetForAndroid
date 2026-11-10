@@ -104,11 +104,20 @@ object QuotaNotifications {
         val name = if (service == "chatgpt") "ChatGPT" else "Claude"
         val title = notificationTitle(prefs, prefix, weeklyUsed, name)
 
-        val compact = "Session $sessionText · Weekly $weeklyText"
+        val fableUsed = if (service == "claude") prefs.getInt("fable_prog", -1) else -1
+        val fableText = if (fableUsed >= 0) UsageDisplay.text("$fableUsed% used", fableUsed, showLeft) else null
+        val compact = buildString {
+            append("Session $sessionText · Weekly $weeklyText")
+            if (fableText != null) append(" · Fable $fableText")
+        }
         val expanded = buildString {
             append("Session: $sessionText — $sessionReset")
             append('\n')
             append("Weekly: $weeklyText — $weeklyReset")
+            if (fableText != null) {
+                val fableReset = prefs.getString("fable_reset", "Unknown")
+                append("\nFable: $fableText — $fableReset")
+            }
         }
 
         notifySafely(context,

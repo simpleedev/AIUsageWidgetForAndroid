@@ -2,13 +2,13 @@
 
 Android home screen widgets that track and display your real-time [Claude](https://claude.ai/) and [ChatGPT](https://chatgpt.com/) usage and remaining limits.
 ### Widget Previews
-| 2x2 Compact Widget | 4x2 Wide Widget |
+| Claude Widget | ChatGPT Widget |
 | :---: | :---: |
-| <img src="widget-2x2.jpg" height="250"/> | <img src="widget-4x2.jpg" height="250"/> |
+| <img src="widget-claude-4x2.png" height="250"/> | <img src="widget-chatgpt-4x2.png" height="250"/> |
 
 ## Features
-- **Real-Time Usage Tracking**: Displays your current Session limit usage and Weekly limit usage natively on your Android home screen.
-- **Responsive Widget Layouts**: Automatically switches between a compact vertical layout and a horizontal wide layout depending on how you resize it. The widget is optimized for **2x2** and **4x2** sizes (with 2x2 being the default).
+- **Real-Time Usage Tracking**: Displays your current Session limit usage and Weekly limit usage natively on your Android home screen, plus weekly Fable usage on the Claude widget when Claude reports it.
+- **Responsive Widget Layouts**: Widgets start at **4x2**, the smallest supported size, and can be made larger. The layout adapts to the space the widget gets, switching to a more compact layout when it is tight.
 - **Auto-Refresh Integration**: Configurable shared background sync (via Android `WorkManager`) updates both widgets and any enabled quota notifications every 15m, 30m, 1h, 2h, 4h, or can be set to "Never" for manual-only refreshes.
 - **Instant Manual Refresh**: Tapping anywhere on the widget instantly triggers a one-shot sync and provides immediate "Refreshing..." visual feedback, including across Wi-Fi → mobile-data handoffs.
 - **Ongoing Quota Notifications**: Optionally keep a separate Claude and/or ChatGPT quota notification in the notification shade. Each shows session and weekly usage/reset text, includes the last refreshed time in its title, opens the matching service tab when tapped, and has a separate **Refresh** action.

@@ -1,9 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  New widgets start at 4x2 cells and can't be shrunk below that; smaller sizes don't have
+  room for the usage rows. They can still be made larger. minWidth/minHeight and
+  minResizeWidth/minResizeHeight use the 70n - 30 dp cell size older launchers expect,
+  and targetCellWidth/targetCellHeight set the default span on Android 12+.
+-->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:minWidth="110dp"
+    android:minWidth="250dp"
     android:minHeight="110dp"
-    android:minResizeWidth="110dp"
-    android:minResizeHeight="40dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:minResizeWidth="250dp"
+    android:minResizeHeight="110dp"
     android:updatePeriodMillis="0"
     android:initialLayout="@layout/widget_layout"
     android:resizeMode="horizontal|vertical"

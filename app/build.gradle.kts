@@ -29,8 +29,8 @@ android {
         applicationId = "dev.johngitdev.aiusagewidget"
         minSdk = 26
         targetSdk = 34
-        versionCode = 23
-        versionName = "1.2.0"
+        versionCode = 24
+        versionName = "1.2.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resValue("string", "app_name", "AI Usage Widget")
     }

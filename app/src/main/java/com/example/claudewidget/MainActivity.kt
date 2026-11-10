@@ -334,6 +334,10 @@ class MainActivity : AppCompatActivity() {
             listOf("session_pct", "session_reset", "session_prog", "session_reset_epoch_ms",
                 "weekly_pct", "weekly_reset", "weekly_prog", "weekly_reset_epoch_ms", "last_update", "updated_at")
                 .forEach { remove("$prefix$it") }
+            if (service == "claude") {
+                remove("fable_prog")
+                remove("fable_reset")
+            }
             remove(if (service == "claude") "claude_error_message" else "chatgpt_error_message")
         }.apply()
         QuotaNotifications.cancel(this, service)

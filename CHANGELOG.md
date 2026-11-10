@@ -17,6 +17,24 @@ signing certificate, so installing 1.0.9 over an older build fails until the old
 removed. Uninstalling clears app data, so you will need to sign in to Claude and ChatGPT
 again — once.
 
+## [1.2.1] - 2026-11-09
+
+### Fixed
+- Claude weekly usage now reads the all-models limit independently of model-specific limits.
+
+### Added
+- The Claude widget and quota notification show weekly Fable usage when Claude reports it.
+
+### Changed
+- Session, Weekly and Fable are evenly spaced in the Claude widget, and Fable uses the same text
+  and bar size as the rows above it.
+- New Claude and ChatGPT widgets start at 4x2 and can't be shrunk below it. Widgets already on
+  the home screen keep their current size.
+- On Android 12 and later, the Claude widget picks its layout separately for portrait and
+  landscape, so a 4x2 widget shows Fable in portrait instead of sizing everything for its much
+  shorter landscape height.
+- New README screenshots of the 4x2 Claude and ChatGPT widgets.
+
 ## [1.2.0] - 2026-11-02
 
 ### Changed

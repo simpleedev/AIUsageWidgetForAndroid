@@ -1,11 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Spare height is shared by equal-weight spacers: one under the header, one between each
+  pair of usage sections and one at the bottom, so Session, Weekly and Fable stay evenly
+  spaced at any widget size. When the widget is too short the spacers collapse to zero.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:gravity="center_vertical"
-    android:padding="12dp"
+    android:paddingHorizontal="12dp"
+    android:paddingVertical="2dp"
     android:background="@drawable/widget_bg">
 
     <!-- Header row -->
@@ -36,15 +41,20 @@
     </LinearLayout>
 
     <!-- Last updated timestamp -->
-        <TextView
+    <TextView
         android:id="@+id/tv_last_update"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Not yet refreshed"
         android:textColor="#FFFFFF"
         android:textSize="9sp"
-        android:layout_marginBottom="6dp"
+        android:includeFontPadding="false"
         android:maxLines="1"/>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"/>
 
     <!-- Session label row -->
     <LinearLayout
@@ -59,6 +69,7 @@
             android:text="Session"
             android:textColor="#FFFFFF"
             android:textSize="11sp"
+            android:includeFontPadding="false"
             android:maxLines="1" />
         <TextView
             android:id="@+id/tv_session_pct"
@@ -68,6 +79,7 @@
             android:textStyle="bold"
             android:textColor="#FFFFFF"
             android:textSize="11sp"
+            android:includeFontPadding="false"
             android:maxLines="1" />
     </LinearLayout>
 
@@ -76,11 +88,10 @@
         android:id="@+id/pb_session"
         style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="match_parent"
-        android:layout_height="6dp"
+        android:layout_height="4dp"
         android:progressDrawable="@drawable/custom_progress_bar"
         android:max="100"
-        android:progress="0"
-        android:layout_marginTop="2dp"/>
+        android:progress="0"/>
 
     <!-- Session reset text -->
     <TextView
@@ -90,8 +101,13 @@
         android:text="Tap refresh"
         android:textColor="#FFFFFF"
         android:textSize="9sp"
-        android:layout_marginBottom="6dp"
+        android:includeFontPadding="false"
         android:maxLines="1"/>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"/>
 
     <!-- Weekly label row -->
     <LinearLayout
@@ -106,6 +122,7 @@
             android:text="Weekly"
             android:textColor="#FFFFFF"
             android:textSize="11sp"
+            android:includeFontPadding="false"
             android:maxLines="1" />
         <TextView
             android:id="@+id/tv_weekly_pct"
@@ -115,6 +132,7 @@
             android:textStyle="bold"
             android:textColor="#FFFFFF"
             android:textSize="11sp"
+            android:includeFontPadding="false"
             android:maxLines="1" />
     </LinearLayout>
 
@@ -123,11 +141,10 @@
         android:id="@+id/pb_weekly"
         style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="match_parent"
-        android:layout_height="6dp"
+        android:layout_height="4dp"
         android:progressDrawable="@drawable/custom_progress_bar"
         android:max="100"
-        android:progress="0"
-        android:layout_marginTop="2dp"/>
+        android:progress="0"/>
 
     <!-- Weekly reset text -->
     <TextView
@@ -137,6 +154,70 @@
         android:text="Tap refresh"
         android:textColor="#FFFFFF"
         android:textSize="9sp"
+        android:includeFontPadding="false"
         android:maxLines="1"/>
+
+    <!-- Spacer above Fable; shown and hidden together with fable_row -->
+    <TextView
+        android:id="@+id/fable_gap"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:visibility="gone"/>
+
+    <!-- Fable section, styled like Session and Weekly above -->
+    <LinearLayout
+        android:id="@+id/fable_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:text="Fable"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:includeFontPadding="false"
+                android:maxLines="1" />
+            <TextView
+                android:id="@+id/tv_fable_pct"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="--"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:includeFontPadding="false"
+                android:maxLines="1" />
+        </LinearLayout>
+        <ProgressBar
+            android:id="@+id/pb_fable"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="4dp"
+            android:progressDrawable="@drawable/custom_progress_bar"
+            android:max="100"
+            android:progress="0"/>
+        <TextView
+            android:id="@+id/tv_fable_reset"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#FFFFFF"
+            android:textSize="9sp"
+            android:includeFontPadding="false"
+            android:maxLines="1"/>
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"/>
 
 </LinearLayout>

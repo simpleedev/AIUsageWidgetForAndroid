@@ -211,6 +211,8 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
                 .putString("weekly_reset", "Error")
                 .putInt("weekly_prog", 0)
                 .putLong("weekly_reset_epoch_ms", 0L)
+                .remove("fable_prog")
+                .remove("fable_reset")
                 .putString("claude_error_message", message)
                 .apply()
             ClaudeWidgetProvider.updateAllWidgets(applicationContext)
@@ -393,40 +395,16 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
                 return Outcome.FAILED
             }
 
-            val json = JSONObject(usageBody)
-            val limits = json.optJSONArray("limits")
-
-            var sessionPct = "0% used"
-            var sessionProg = 0
-            var sessionReset = "No limit"
-            var sessionResetEpochMs = 0L
-            var sessionLimitPresent = false
-            var weeklyPct = "0% used"
-            var weeklyProg = 0
-            var weeklyReset = "No limit"
-            var weeklyResetEpochMs = 0L
-
-            if (limits != null) {
-                for (i in 0 until limits.length()) {
-                    val limit = limits.getJSONObject(i)
-                    val group = limit.optString("group", "")
-                    val percent = limit.optInt("percent", 0)
-                    val resetsAt = limit.optString("resets_at", "")
-
-                    if (group == "session") {
-                        sessionLimitPresent = true
-                        sessionProg = percent
-                        sessionPct = "$percent% used"
-                        sessionReset = formatResetTime(resetsAt)
-                        sessionResetEpochMs = parseIsoResetEpochMs(resetsAt)
-                    } else if (group == "weekly") {
-                        weeklyProg = percent
-                        weeklyPct = "$percent% used"
-                        weeklyReset = formatResetTime(resetsAt)
-                        weeklyResetEpochMs = parseIsoResetEpochMs(resetsAt)
-                    }
-                }
-            }
+            val usage = ClaudeUsage.parse(JSONObject(usageBody))
+            val sessionProg = usage.session?.percent ?: 0
+            val sessionPct = "$sessionProg% used"
+            var sessionReset = usage.session?.let { formatResetTime(it.resetsAt) } ?: "No limit"
+            var sessionResetEpochMs = usage.session?.let { parseIsoResetEpochMs(it.resetsAt) } ?: 0L
+            val weeklyProg = usage.weekly?.percent ?: 0
+            val weeklyPct = "$weeklyProg% used"
+            val weeklyReset = usage.weekly?.let { formatResetTime(it.resetsAt) } ?: "No limit"
+            val weeklyResetEpochMs = usage.weekly?.let { parseIsoResetEpochMs(it.resetsAt) } ?: 0L
+            val fableReset = usage.fable?.let { formatResetTime(it.resetsAt) }
 
             // Weekly exhaustion takes precedence over the session window because a session reset
             // cannot restore usable quota while the weekly window is exhausted. Mirror the weekly
@@ -435,7 +413,7 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
             if (weeklyProg >= 100) {
                 sessionReset = weeklyReset
                 sessionResetEpochMs = weeklyResetEpochMs
-            } else if (sessionLimitPresent && sessionProg == 0) {
+            } else if (usage.session != null && sessionProg == 0) {
                 // Claude may explicitly report a fresh 0%-used session while omitting resets_at.
                 // The usage state is still known: the user can use the session now.
                 sessionReset = "Ready"
@@ -443,7 +421,7 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
 
             val updatedAt = nowTimestamp()
             sessions.ifCurrent(session) {
-                prefs.edit()
+                val editor = prefs.edit()
                     .putString("session_pct", sessionPct)
                     .putString("session_reset", sessionReset)
                     .putInt("session_prog", sessionProg)
@@ -452,15 +430,19 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
                     .putString("weekly_reset", weeklyReset)
                     .putInt("weekly_prog", weeklyProg)
                     .putLong("weekly_reset_epoch_ms", weeklyResetEpochMs)
+                    .putString("fable_reset", fableReset)
                     .putString("last_update", "Updated $updatedAt")
                     .putString("updated_at", updatedAt)
                     .putLong("last_successful_refresh_epoch_ms", System.currentTimeMillis())
                     .remove("claude_error_message")
-                    .apply()
+                if (usage.fable != null) editor.putInt("fable_prog", usage.fable.percent)
+                else editor.remove("fable_prog")
+                editor.apply()
 
                 ClaudeWidgetProvider.updateAllWidgets(applicationContext)
                 QuotaNotifications.updateService(applicationContext, "claude")
-                AppLog.i(applicationContext, "Claude", "Updated: session $sessionPct, weekly $weeklyPct")
+                val fableStatus = usage.fable?.let { ", Fable ${it.percent}% used" }.orEmpty()
+                AppLog.i(applicationContext, "Claude", "Updated: session $sessionPct, weekly $weeklyPct$fableStatus")
             }
             return Outcome.UPDATED
 

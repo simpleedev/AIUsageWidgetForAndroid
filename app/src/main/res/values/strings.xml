@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- app_name is set per build type in app/build.gradle.kts -->
+    <string name="all_accounts_widget_description">Every signed-in Claude and ChatGPT account, each on its own card</string>
+    <string name="all_accounts_list_widget_description">Every signed-in Claude and ChatGPT account in one compact list</string>
+    <string name="all_accounts_widget_empty">No accounts signed in.\nTap to open the app and sign in to Claude or ChatGPT.</string>
+</resources>

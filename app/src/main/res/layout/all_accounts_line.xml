@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  One account in the All Accounts list widget: a title line, then one line per limit with its
+  bar between the label and the percentage, and the time to its reset at the end when there's
+  room. A status (offline or an error) shares the title's line. No card, gaps or spacers, so
+  it's as short as the text allows; spare height is shared out around the content. The ids
+  match all_accounts_card.xml. Sizes here are what AllAccountsLayout.cardHeight() estimates
+  for Density.LIST; change both together.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/card_root"
+    android:layout_width="0dp"
+    android:layout_height="match_parent"
+    android:layout_weight="1"
+    android:orientation="vertical"
+    android:gravity="center_vertical"
+    android:paddingHorizontal="4dp"
+    android:paddingVertical="4dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+        <ImageView
+            android:id="@+id/iv_card_icon"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:src="@drawable/ic_claude" />
+        <TextView
+            android:id="@+id/tv_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:ellipsize="end" />
+        <!-- Only when something is wrong: offline, an error, or not refreshed yet -->
+        <TextView
+            android:id="@+id/tv_last_update"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:gravity="end"
+            android:textColor="#BFFFFFFF"
+            android:textSize="9sp"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="48dp"
+            android:text="Session"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:includeFontPadding="false"
+            android:maxLines="1" />
+        <ProgressBar
+            android:id="@+id/pb_session"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="4dp"
+            android:layout_marginHorizontal="6dp"
+            android:progressDrawable="@drawable/custom_progress_bar"
+            android:max="100"
+            android:progress="0" />
+        <TextView
+            android:id="@+id/tv_session_pct"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="58dp"
+            android:gravity="end"
+            android:text="--"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:includeFontPadding="false"
+            android:maxLines="1" />
+        <TextView
+            android:id="@+id/tv_session_reset"
+            android:layout_width="46dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:gravity="end"
+            android:textColor="#BFFFFFFF"
+            android:textSize="9sp"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="48dp"
+            android:text="Weekly"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:includeFontPadding="false"
+            android:maxLines="1" />
+        <ProgressBar
+            android:id="@+id/pb_weekly"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="4dp"
+            android:layout_marginHorizontal="6dp"
+            android:progressDrawable="@drawable/custom_progress_bar"
+            android:max="100"
+            android:progress="0" />
+        <TextView
+            android:id="@+id/tv_weekly_pct"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="58dp"
+            android:gravity="end"
+            android:text="--"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:includeFontPadding="false"
+            android:maxLines="1" />
+        <TextView
+            android:id="@+id/tv_weekly_reset"
+            android:layout_width="46dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:gravity="end"
+            android:textColor="#BFFFFFFF"
+            android:textSize="9sp"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/fable_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:visibility="gone">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="48dp"
+            android:text="Fable"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:includeFontPadding="false"
+            android:maxLines="1" />
+        <ProgressBar
+            android:id="@+id/pb_fable"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="4dp"
+            android:layout_marginHorizontal="6dp"
+            android:progressDrawable="@drawable/custom_progress_bar"
+            android:max="100"
+            android:progress="0" />
+        <TextView
+            android:id="@+id/tv_fable_pct"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="58dp"
+            android:gravity="end"
+            android:text="--"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:includeFontPadding="false"
+            android:maxLines="1" />
+        <TextView
+            android:id="@+id/tv_fable_reset"
+            android:layout_width="46dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:gravity="end"
+            android:textColor="#BFFFFFFF"
+            android:textSize="9sp"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+</LinearLayout>

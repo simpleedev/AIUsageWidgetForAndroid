@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Both All Accounts widgets. AllAccountsWidgetProvider fills one of the two containers with
+  rows, each holding one or more accounts, and hides the other:
+  - all_accounts_cards: rows of cards (all_accounts_row.xml, all_accounts_card*.xml), 8dp apart.
+  - all_accounts_lines: one list (all_accounts_line_row.xml, all_accounts_line.xml), with a
+    line between entries.
+  Rows share the height equally and entries share their row's width. AllAccountsLayout's dp
+  estimates follow the sizes here.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/all_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="@drawable/widget_bg">
+
+    <!-- Header: title, when the readings are from, refresh -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="20dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="4dp">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="AI Usage"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:includeFontPadding="false"
+            android:maxLines="1" />
+        <TextView
+            android:id="@+id/tv_all_status"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:gravity="end"
+            android:text="Not yet refreshed"
+            android:textColor="#BFFFFFFF"
+            android:textSize="10sp"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:ellipsize="end" />
+        <ImageView
+            android:id="@+id/btn_all_refresh"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_refresh"
+            android:contentDescription="Refresh" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/all_accounts_cards"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="8dp"
+        android:orientation="vertical"
+        android:showDividers="middle"
+        android:divider="@drawable/widget_gap" />
+
+    <LinearLayout
+        android:id="@+id/all_accounts_lines"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="6dp"
+        android:orientation="vertical"
+        android:showDividers="middle"
+        android:divider="@drawable/widget_line"
+        android:dividerPadding="4dp"
+        android:visibility="gone" />
+
+    <!-- Accounts that didn't fit -->
+    <TextView
+        android:id="@+id/tv_all_more"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:gravity="center"
+        android:textColor="#BFFFFFFF"
+        android:textSize="10sp"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:visibility="gone" />
+
+    <!-- Shown instead of the list when no account is signed in -->
+    <TextView
+        android:id="@+id/tv_all_empty"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:padding="8dp"
+        android:text="@string/all_accounts_widget_empty"
+        android:textColor="#BFFFFFFF"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
+</LinearLayout>

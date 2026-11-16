@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The All Accounts list widget: the All Accounts widget with every account in one compact list
+  instead of on cards. It starts at 4x4 like the card version, but packs more accounts in and
+  can be shrunk to 4x2. Accounts that don't fit are summed up as "+N more". minWidth and
+  minHeight use the 70n - 30 dp cell size older launchers expect, and targetCellWidth and
+  targetCellHeight set the default span on Android 12+.
+
+  It shows every signed-in account, so there's no account to pick and no configure activity.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="250dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="4"
+    android:minResizeWidth="250dp"
+    android:minResizeHeight="110dp"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/all_accounts_widget"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:description="@string/all_accounts_list_widget_description"
+    android:previewImage="@mipmap/ic_launcher">
+</appwidget-provider>

@@ -80,6 +80,13 @@ class MainActivity : AppCompatActivity() {
                 putExtra(EXTRA_TARGET_TAB, Accounts.serviceOf(account))
                 putExtra(EXTRA_TARGET_ACCOUNT, account)
             }
+
+        /** Opens the app on its Usage tab, the same way as [openAccountIntent]. */
+        fun openUsageIntent(context: Context): Intent =
+            Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra(EXTRA_TARGET_TAB, "usage")
+            }
     }
 
     private lateinit var sharedPrefs: SharedPreferences
@@ -273,6 +280,11 @@ class MainActivity : AppCompatActivity() {
      */
     private fun applyTarget(intent: Intent?): Boolean {
         val tab = intent?.getStringExtra(EXTRA_TARGET_TAB) ?: return false
+        if (tab == "usage") {
+            AppLog.i(this, "App", "Opened Usage tab")
+            switchTab("usage")
+            return true
+        }
         val service = if (tab == "chatgpt") "chatgpt" else "claude"
         val account = intent.getStringExtra(EXTRA_TARGET_ACCOUNT)
             ?.takeIf { Accounts.serviceOf(it) == service && Accounts.exists(sharedPrefs, it) }
@@ -867,13 +879,14 @@ class MainActivity : AppCompatActivity() {
         cookieManager.flush()
     }
 
-    /** Redraws [service]'s widgets and its accounts' notifications. */
+    /** Redraws [service]'s widgets, the All Accounts widget and [service]'s accounts' notifications. */
     private fun updateWidgetsFor(service: String) {
         if (service == "claude") {
             ClaudeWidgetProvider.updateAllWidgets(this)
         } else {
             ChatGptWidgetProvider.updateAllWidgets(this)
         }
+        AllAccountsWidgetProvider.updateAllWidgets(this)
         Accounts.list(sharedPrefs, service).forEach { QuotaNotifications.updateAccount(this, it) }
     }
 
@@ -936,6 +949,7 @@ class MainActivity : AppCompatActivity() {
                     sharedPrefs.edit().putString("tap_action", newAction).apply()
                     ClaudeWidgetProvider.updateAllWidgets(this@MainActivity)
                     ChatGptWidgetProvider.updateAllWidgets(this@MainActivity)
+                    AllAccountsWidgetProvider.updateAllWidgets(this@MainActivity)
                 }
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}

@@ -313,6 +313,8 @@ class UpdateWidgetWorker(appContext: Context, workerParams: WorkerParameters) :
             if (service == Accounts.CLAUDE) ClaudeWidgetProvider.updateAllWidgets(applicationContext)
             else ChatGptWidgetProvider.updateAllWidgets(applicationContext)
         }
+        // Once, after every account, so its "Refreshing..." lasts until the whole refresh is done
+        AllAccountsWidgetProvider.updateAllWidgets(applicationContext)
 
         // Retrying refreshes every account, which is harmless for the ones that already worked
         return if (offline && willRetry) Result.retry() else Result.success()

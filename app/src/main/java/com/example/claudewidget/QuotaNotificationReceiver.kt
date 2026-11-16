@@ -21,6 +21,7 @@ class QuotaNotificationReceiver : BroadcastReceiver() {
                 // One refresh updates every account, so every widget and notification shows it.
                 ClaudeWidgetProvider.showRefreshingState(context)
                 ChatGptWidgetProvider.showRefreshingState(context)
+                AllAccountsWidgetProvider.showRefreshingState(context)
                 val prefs = context.getSharedPreferences("ClaudeWidgetPrefs", Context.MODE_PRIVATE)
                 Accounts.all(prefs).forEach { QuotaNotifications.showRefreshing(context, it) }
                 // Manual work intentionally runs immediately rather than waiting on WorkManager's

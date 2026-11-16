@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An account card inside the All Accounts widget: a step lighter than widget_bg, with corners
+     that follow its 28dp ones less the widget's 12dp padding. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#323234" />
+    <corners android:radius="16dp" />
+</shape>

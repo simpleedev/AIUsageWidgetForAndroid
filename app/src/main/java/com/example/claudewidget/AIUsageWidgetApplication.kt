@@ -55,6 +55,7 @@ class AIUsageWidgetApplication : Application() {
         // Replace old exported refresh PendingIntents after an upgrade.
         ClaudeWidgetProvider.updateAllWidgets(this)
         ChatGptWidgetProvider.updateAllWidgets(this)
+        AllAccountsWidgetProvider.updateAllWidgets(this)
         // ACTION_SCREEN_ON is a protected system-only broadcast. Android 14's dynamic-receiver
         // export-flag requirement explicitly exempts receivers that listen only for system broadcasts.
         @Suppress("DEPRECATION")

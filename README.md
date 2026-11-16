@@ -6,6 +6,10 @@ Android home screen widgets that track and display your real-time [Claude](https
 | :---: | :---: |
 | <img src="widget-claude-4x2.png" height="250"/> | <img src="widget-chatgpt-4x2.png" height="250"/> |
 
+| All Accounts Widget | All Accounts List Widget |
+| :---: | :---: |
+| <img src="widget-all-accounts-4x4.png" height="400"/> | <img src="widget-all-accounts-list-4x4.png" height="400"/> |
+
 ## Features
 - **Usage Tab**: Open the app and your usage is right there: the **Usage** tab shows every signed-in account as the same card as its home screen widget. It refreshes when you open the app and then every minute while the tab stays open (adjustable in **Settings → Usage Tab Refresh**). Tap a card to open that account.
 - **Multiple Accounts**: Add more than one Claude or ChatGPT account (up to 10 each) with **+ Add account** on the Claude or ChatGPT tab, and give each a name like "Work" or "Personal". Each added account logs in with its own browser cookies, so it can use a different Google account than your first one. When you add a widget, you pick which account it shows; on Android 12 and later you can change it later by reconfiguring the widget. Each account has its own optional quota notification.

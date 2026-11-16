@@ -75,6 +75,8 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.work:work-runtime-ktx:2.8.1")
     implementation("com.squareup.okhttp3:okhttp:4.11.0")
+    // WebView profiles: a separate cookie jar for each additional account's login
+    implementation("androidx.webkit:webkit:1.12.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.11.0")
     // The real org.json, so JVM tests can run SessionStore (android.jar only has stubs)

@@ -40,6 +40,9 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.webkit.ProfileStore
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import okhttp3.Call
@@ -111,6 +114,52 @@ class MainActivity : AppCompatActivity() {
         "Only when the app opens" to 0L
     )
 
+    /**
+     * Whether this device's WebView can keep separate cookies for each account's login (see [BrowserProfiles]).
+     * Code that calls a profile API checks the feature itself, right there, so lint can see the check.
+     */
+    private val profilesSupported get() = WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)
+
+    /** The cookie jar and web storage of one WebView profile. [name] is null for the default profile. */
+    private class ProfileData(val name: String?, val cookies: CookieManager, val storage: WebStorage)
+
+    private fun defaultProfile() = ProfileData(null, CookieManager.getInstance(), WebStorage.getInstance())
+
+    /** The profile [account] logs in with. Without profile support, every account uses the default one. */
+    private fun profileFor(account: String): ProfileData {
+        val name = BrowserProfiles.nameFor(account) ?: return defaultProfile()
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) return defaultProfile()
+        val profile = ProfileStore.getInstance().getOrCreateProfile(name)
+        return ProfileData(name, profile.cookieManager, profile.webStorage)
+    }
+
+    /** Profiles of removed accounts that couldn't be deleted at the time (still in use). */
+    private fun deleteOrphanProfiles() {
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) return
+        val store = ProfileStore.getInstance()
+        BrowserProfiles.orphans(store.allProfileNames, Accounts.all(sharedPrefs)).forEach {
+            try {
+                store.deleteProfile(it)
+            } catch (e: IllegalStateException) {
+                AppLog.w(this, "Browser", "Couldn't delete an unused browser profile", e)
+            }
+        }
+    }
+
+    /**
+     * Without separate profiles every login shares one cookie jar. Once any service has more than one
+     * account, each login then starts from an empty jar, so it can't be signed straight into another
+     * account's Google session. (Re-login is no longer one tap on such devices.)
+     */
+    private fun sharedJarNeedsReset() = !profilesSupported && Accounts.SERVICES.any { Accounts.hasSeveral(sharedPrefs, it) }
+
+    /** Whether [account]'s login page keeps no sign-ins from other accounts. */
+    private fun loginIsSeparate(account: String) =
+        if (profilesSupported) BrowserProfiles.nameFor(account) != null else sharedJarNeedsReset()
+
+    /** The service whose login is waiting for the shared cookie jar to be emptied, and its account. */
+    private val pendingFreshLogin = mutableMapOf<String, String>()
+
     // ---- Usage tab state ----
     private var usageRefreshing = false
     private var usageRetrying = false
@@ -138,11 +187,12 @@ class MainActivity : AppCompatActivity() {
 
         sharedPrefs = getSharedPreferences("ClaudeWidgetPrefs", Context.MODE_PRIVATE)
         if (savedInstanceState == null) {
-            // The worker uses the encrypted copy. Remove leftover service sessions from the browser.
+            deleteOrphanProfiles()
+            // The worker uses the encrypted copy. Remove leftover service sessions from each browser profile.
             // Not on recreation (rotation), which would throw away a login that's in progress.
-            Accounts.SERVICES.forEach { service ->
-                if (Accounts.list(sharedPrefs, service).any { sessions.isLoggedIn(it) }) clearSiteData(service)
-            }
+            Accounts.all(sharedPrefs).filter { sessions.isLoggedIn(it) }
+                .distinctBy { Accounts.serviceOf(it) to (if (profilesSupported) BrowserProfiles.nameFor(it) else null) }
+                .forEach { clearSiteData(Accounts.serviceOf(it), profileFor(it)) }
         }
         QuotaNotifications.restoreEnabled(this)
 
@@ -489,8 +539,10 @@ class MainActivity : AppCompatActivity() {
         val browser = browserFor(service)
         if (browser.loginInProgress && browser.account == account) {
             browser.finish()
-            clearSiteData(service)
+            clearSiteData(service, browser.profile)
         }
+        pendingFreshLogin.remove(service)
+        deleteProfile(account)
         QuotaNotifications.forget(this, account)
         Accounts.remove(sharedPrefs, account)
         AppLog.i(this, Accounts.logName(account), "Account removed")
@@ -559,6 +611,8 @@ class MainActivity : AppCompatActivity() {
         val several = Accounts.hasSeveral(sharedPrefs, service)
         findViewById<TextView>(R.id.tv_login_instructions).text = if (several) {
             "Log in below with the ${serviceName(service)} account to save as \"${Accounts.label(sharedPrefs, account)}\". " +
+                (if (loginIsSeparate(account)) "This login doesn't share sign-ins with your other accounts, so you can " +
+                    "use a different Google account. " else "") +
                 "The app will automatically save your session for the widget."
         } else {
             "Please log in to ${serviceName(service)} below. The app will automatically save your session for the widget."
@@ -572,9 +626,52 @@ class MainActivity : AppCompatActivity() {
         // The browser may be partway through another account's login. Its cookies must not be
         // saved as this account, so drop them before starting over.
         val otherAccount = browser.loginInProgress && browser.account != account
-        if (otherAccount) clearSiteData(service)
-        if (restart || otherAccount || !browser.loginInProgress) {
+        if (otherAccount) clearSiteData(service, browser.profile)
+        val waiting = pendingFreshLogin[service] == account
+        if (restart || otherAccount || (!browser.loginInProgress && !waiting)) {
+            beginLogin(browser, account)
+        }
+    }
+
+    /** Opens [account]'s login page, first emptying the shared cookie jar when [sharedJarNeedsReset]. */
+    private fun beginLogin(browser: LoginBrowser, account: String) {
+        if (!sharedJarNeedsReset()) {
+            pendingFreshLogin.remove(browser.service)
             browser.startLogin(account)
+            return
+        }
+        browser.finish()
+        pendingFreshLogin[browser.service] = account
+        AppLog.i(this, Accounts.logName(account), "Clearing browser sign-ins before login")
+        CookieManager.getInstance().removeAllCookies {
+            runOnUiThread {
+                WebStorage.getInstance().deleteAllData()
+                CookieManager.getInstance().flush()
+                // Only the latest request counts; switching accounts meanwhile replaces it
+                if (!isDestroyed && pendingFreshLogin[browser.service] == account) {
+                    pendingFreshLogin.remove(browser.service)
+                    browser.startLogin(account)
+                }
+            }
+        }
+    }
+
+    /** Deletes a removed account's browser profile, with every sign-in it held. */
+    private fun deleteProfile(account: String) {
+        val name = BrowserProfiles.nameFor(account) ?: return
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) return
+        // A WebView still using the profile has to go first
+        listOf(claudeBrowser, chatGptBrowser).filter { it.profile.name == name }.forEach { it.useDefaultProfile() }
+        val store = ProfileStore.getInstance()
+        try {
+            store.deleteProfile(name)
+        } catch (e: IllegalStateException) {
+            // Still in use while its WebView shuts down: empty it now, and the next start deletes it
+            store.getProfile(name)?.let {
+                it.cookieManager.removeAllCookies(null)
+                it.webStorage.deleteAllData()
+            }
+            AppLog.w(this, "Browser", "Browser profile still in use; emptied it instead", e)
         }
     }
 
@@ -685,10 +782,13 @@ class MainActivity : AppCompatActivity() {
         return true
     }
 
-    /** Deletes [service]'s cookies and web storage, leaving the other service and the Google sign-in alone. */
-    private fun clearSiteData(service: String) {
+    /**
+     * Deletes [service]'s cookies and web storage in [profile], leaving the other service and the
+     * Google sign-in alone.
+     */
+    private fun clearSiteData(service: String, profile: ProfileData) {
         if (service == "claude") {
-            clearSiteData(
+            clearSiteData(profile,
                 urls = listOf("https://claude.ai", "https://claude.ai/", "https://api.claude.ai", "https://anthropic.com",
                     "https://auth.claude.ai", "https://console.anthropic.com", "https://platform.claude.com"),
                 domains = listOf("claude.ai", ".claude.ai", "api.claude.ai", "auth.claude.ai", "anthropic.com", ".anthropic.com",
@@ -708,7 +808,7 @@ class MainActivity : AppCompatActivity() {
                     "https://console.anthropic.com", "https://platform.claude.com")
             )
         } else {
-            clearSiteData(
+            clearSiteData(profile,
                 urls = listOf("https://chatgpt.com", "https://chatgpt.com/", "https://oaistatic.com", "https://openai.com",
                     "https://auth.openai.com", "https://auth0.openai.com"),
                 domains = listOf("chatgpt.com", ".chatgpt.com", "oaistatic.com", ".oaistatic.com", "openai.com", ".openai.com",
@@ -727,8 +827,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun clearSiteData(urls: List<String>, domains: List<String>, knownNames: Set<String>, origins: List<String>) {
-        val cookieManager = CookieManager.getInstance()
+    private fun clearSiteData(
+        profile: ProfileData, urls: List<String>, domains: List<String>, knownNames: Set<String>, origins: List<String>
+    ) {
+        val cookieManager = profile.cookies
 
         val cookieNamesToClear = mutableSetOf<String>()
         cookieNamesToClear.addAll(knownNames)
@@ -756,7 +858,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         try {
-            val webStorage = WebStorage.getInstance()
+            val webStorage = profile.storage
             origins.forEach { webStorage.deleteOrigin(it) }
         } catch (e: Exception) {
             AppLog.w(this, "Browser", "Failed to clear web storage", e)
@@ -939,7 +1041,7 @@ class MainActivity : AppCompatActivity() {
         // ---- Re-login button (clears this account's session only, preserves Google account) ----
         findViewById<View>(R.id.btn_relogin).setOnClickListener {
             if (!clearSavedSession(account)) return@setOnClickListener
-            clearSiteData(service)
+            clearSiteData(service, profileFor(account))
             AppLog.i(this, Accounts.logName(account), "Re-login: cleared the saved session")
             renderAccountBar()
             showLoginScreen(restart = true)
@@ -950,15 +1052,17 @@ class MainActivity : AppCompatActivity() {
         fullLogoutBtn.text = "Log out of ${Accounts.displayName(sharedPrefs, account)} completely (clear Google session)"
         fullLogoutBtn.setOnClickListener {
             if (!clearSavedSession(account)) return@setOnClickListener
-            clearSiteData(service)
+            val profile = profileFor(account)
+            clearSiteData(service, profile)
             AppLog.i(this, Accounts.logName(account), "Full logout: cleared the saved session and all cookies")
             renderAccountBar()
-            // Clearing the Google sign-in reliably takes removing every cookie. Other accounts stay
-            // logged in: their widgets and tabs use the sessions saved by the app, not these cookies.
-            CookieManager.getInstance().removeAllCookies {
-                CookieManager.getInstance().flush()
+            // Clearing the Google sign-in reliably takes removing every cookie in the account's browser
+            // profile. Other accounts stay logged in: their widgets and tabs use the sessions saved by
+            // the app, not these cookies.
+            profile.cookies.removeAllCookies {
+                profile.cookies.flush()
                 runOnUiThread {
-                    WebStorage.getInstance().deleteAllData()
+                    profile.storage.deleteAllData()
                     claudeBrowser.webView.clearCache(true)
                     chatGptBrowser.webView.clearCache(true)
                     if (currentTab == service && currentAccount == account) showLoginScreen(restart = true)
@@ -977,11 +1081,22 @@ class MainActivity : AppCompatActivity() {
     /**
      * The login browser for one service. Each service has its own WebView, popup and login check, tied to
      * that service rather than to whichever tab is showing, so the two logins can't affect each other.
-     * (Cookies are shared app-wide per domain, which is what lets the Google sign-in carry over.)
      * One login runs at a time per service; [account] is the account it will be saved as.
+     *
+     * Its WebView uses the account's browser profile ([BrowserProfiles]). The first accounts share the
+     * default profile, which is what lets one Google sign-in carry over between Claude and ChatGPT; every
+     * other account has its own cookies, so it can log in with a different Google account.
      */
-    private inner class LoginBrowser(val service: String, val frame: FrameLayout, val webView: WebView) {
+    private inner class LoginBrowser(val service: String, val frame: FrameLayout, initialWebView: WebView) {
         private val name = serviceName(service)
+
+        /** The WebView showing the login page. Replaced when a login needs another profile. */
+        var webView: WebView = initialWebView
+            private set
+
+        /** The profile [webView] uses: the cookies and storage this login reads and clears. */
+        var profile: ProfileData = defaultProfile()
+            private set
 
         /** The account a detected login is saved to. Set when the login page is opened. */
         var account: String = service
@@ -1006,7 +1121,11 @@ class MainActivity : AppCompatActivity() {
         }
 
         init {
-            applyBrowserSettings(webView)
+            setUp(webView)
+        }
+
+        private fun setUp(webView: WebView) {
+            applyBrowserSettings(webView, profile.cookies)
             webView.settings.apply {
                 useWideViewPort = true
                 loadWithOverviewMode = true
@@ -1077,6 +1196,7 @@ class MainActivity : AppCompatActivity() {
 
         fun startLogin(account: String) {
             this.account = account
+            useProfile(profileFor(account))
             AppLog.i(this@MainActivity, Accounts.logName(account), "Opening the login page")
             loginInProgress = true
             sessionCall?.cancel()
@@ -1100,6 +1220,42 @@ class MainActivity : AppCompatActivity() {
             webView.loadUrl("about:blank")
         }
 
+        /** Moves to the default profile, so a removed account's profile is no longer in use. */
+        fun useDefaultProfile() {
+            finish()
+            useProfile(defaultProfile())
+        }
+
+        /** A WebView's profile is fixed when it's created, so switching profiles means a new WebView. */
+        private fun useProfile(next: ProfileData) {
+            if (next.name == profile.name) {
+                profile = next
+                return
+            }
+            closePopup()
+            sessionCall?.cancel()
+            sessionCall = null
+            val old = webView
+            val fresh = WebView(this@MainActivity)
+            // Must come before anything else is done with the WebView. A named profile only exists
+            // when the feature does (see profileFor).
+            val profileName = next.name
+            if (profileName != null && WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
+                WebViewCompat.setProfile(fresh, profileName)
+            }
+            profile = next
+            fresh.id = old.id
+            setUp(fresh)
+            val index = frame.indexOfChild(old)
+            frame.removeView(old)
+            old.destroy()
+            frame.addView(fresh, index, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            ))
+            webView = fresh
+        }
+
         private fun checkForLogin() {
             if (service == "claude") checkClaudeLoginCookies(this) else attemptChatGptSessionExtraction(this)
         }
@@ -1121,8 +1277,13 @@ class MainActivity : AppCompatActivity() {
         private fun openPopup(resultMsg: Message?) {
             closePopup()
             val newWebView = WebView(this@MainActivity)
+            // A popup has to be in its opener's profile, which is also where its Google sign-in belongs
+            val profileName = profile.name
+            if (profileName != null && WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
+                WebViewCompat.setProfile(newWebView, profileName)
+            }
             popup = newWebView
-            applyBrowserSettings(newWebView)
+            applyBrowserSettings(newWebView, profile.cookies)
 
             newWebView.webChromeClient = object : WebChromeClient() {
                 override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean = true
@@ -1151,8 +1312,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Settings shared by the login pages and their Google sign-in popups. */
-    private fun applyBrowserSettings(view: WebView) {
+    /** Settings shared by the login pages and their Google sign-in popups. [cookies] is the view's profile's. */
+    private fun applyBrowserSettings(view: WebView, cookies: CookieManager) {
         view.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -1171,8 +1332,8 @@ class MainActivity : AppCompatActivity() {
             val defaultAgent = userAgentString
             userAgentString = defaultAgent.replace("; wv", "")
         }
-        CookieManager.getInstance().setAcceptCookie(true)
-        CookieManager.getInstance().setAcceptThirdPartyCookies(view, true)
+        cookies.setAcceptCookie(true)
+        cookies.setAcceptThirdPartyCookies(view, true)
     }
 
     private fun blockedResource() = WebResourceResponse(
@@ -1188,7 +1349,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun checkClaudeLoginCookies(browser: LoginBrowser) {
         if (!browser.loginInProgress) return
-        val cookies = CookieManager.getInstance().getCookie("https://claude.ai")
+        val cookies = browser.profile.cookies.getCookie("https://claude.ai")
         if (hasValidClaudeSessionKey(cookies)) {
             val userAgent = browser.webView.settings.userAgentString
             completeLogin(browser, cookies, null, userAgent)
@@ -1198,7 +1359,7 @@ class MainActivity : AppCompatActivity() {
     private fun attemptChatGptSessionExtraction(browser: LoginBrowser) {
         if (!browser.loginInProgress || browser.sessionCall != null ||
             !LoginUrlPolicy.isServiceOrigin("chatgpt", browser.webView.url)) return
-        val cookies = CookieManager.getInstance().getCookie("https://chatgpt.com") ?: return
+        val cookies = browser.profile.cookies.getCookie("https://chatgpt.com") ?: return
         val userAgent = browser.webView.settings.userAgentString
         val call = SessionHttp.chatGptSessionCall(loginClient, cookies, userAgent)
         browser.sessionCall = call
@@ -1238,7 +1399,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         browser.finish()
-        clearSiteData(browser.service)
+        clearSiteData(browser.service, browser.profile)
         browser.webView.clearCache(true)
 
         val prefix = Accounts.prefix(account)
@@ -1251,7 +1412,7 @@ class MainActivity : AppCompatActivity() {
                 .remove(Accounts.errorKey(account))
         }
         editor.apply()
-        CookieManager.getInstance().flush()
+        browser.profile.cookies.flush()
         AppLog.i(this, Accounts.logName(account), "Login detected, session saved")
 
         if (currentTab == browser.service) {
@@ -1320,6 +1481,8 @@ class MainActivity : AppCompatActivity() {
         resumed = false
         usageHandler.removeCallbacks(usageTicker)
         CookieManager.getInstance().flush()
+        claudeBrowser.profile.cookies.flush()
+        chatGptBrowser.profile.cookies.flush()
     }
 
     override fun onDestroy() {

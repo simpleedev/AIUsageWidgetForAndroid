@@ -27,6 +27,11 @@ again — once.
 - **Multiple accounts.** Add up to 10 Claude and 10 ChatGPT accounts with **+ Add account** on the
   Claude or ChatGPT tab, rename them ("Work", "Personal"), and remove the ones you no longer need.
   Each account has its own saved sign-in, readings and optional quota notification.
+- Each added account logs in with its own browser cookies, so "Continue with Google" can use a
+  different Google account instead of signing straight back into the first one, and its re-login
+  keeps its own Google session. The first Claude and ChatGPT accounts still share one, as before.
+  On devices whose Android System WebView is too old for separate cookies, every login starts
+  signed out of Google once you have more than one account.
 - When a service has more than one account, adding its widget asks which account to show, and the
   widget title names it (for example `Claude · Work`). On Android 12 and later, reconfigure a
   widget to change its account.

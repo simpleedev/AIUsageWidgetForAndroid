@@ -29,8 +29,8 @@ android {
         applicationId = "dev.johngitdev.aiusagewidget"
         minSdk = 26
         targetSdk = 34
-        versionCode = 24
-        versionName = "1.2.1"
+        versionCode = 25
+        versionName = "1.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resValue("string", "app_name", "AI Usage Widget")
     }
@@ -77,6 +77,8 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.11.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.11.0")
+    // The real org.json, so JVM tests can run SessionStore (android.jar only has stubs)
+    testImplementation("org.json:json:20231013")
     androidTestImplementation("androidx.test:runner:1.5.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
 }

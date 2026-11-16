@@ -82,7 +82,7 @@ class ClaudeUsageTest {
                     putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, width)
                     putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, height)
                 }
-                val root = ClaudeWidgetProvider.createViews(context, prefs, options).apply(context, null)
+                val root = ClaudeWidgetProvider.createViews(context, prefs, "claude", options).apply(context, null)
                 val density = context.resources.displayMetrics.density
                 val widthSpec = View.MeasureSpec.makeMeasureSpec((width * density).roundToInt(), View.MeasureSpec.EXACTLY)
                 val heightSpec = View.MeasureSpec.makeMeasureSpec((height * density).roundToInt(), View.MeasureSpec.EXACTLY)
@@ -120,7 +120,7 @@ class ClaudeUsageTest {
             }
 
             prefs.edit().remove("fable_prog").remove("fable_reset").apply()
-            val root = ClaudeWidgetProvider.createViews(context, prefs, Bundle()).apply(context, null)
+            val root = ClaudeWidgetProvider.createViews(context, prefs, "claude", Bundle()).apply(context, null)
             assertEquals(View.GONE, root.findViewById<View>(R.id.fable_row).visibility)
             assertEquals(View.GONE, root.findViewById<View>(R.id.fable_gap).visibility)
         }

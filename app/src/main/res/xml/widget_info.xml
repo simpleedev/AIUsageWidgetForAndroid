@@ -4,6 +4,9 @@
   room for the usage rows. They can still be made larger. minWidth/minHeight and
   minResizeWidth/minResizeHeight use the 70n - 30 dp cell size older launchers expect,
   and targetCellWidth/targetCellHeight set the default span on Android 12+.
+
+  WidgetConfigActivity picks the account a new widget shows; it confirms straight away when
+  there is only one. "reconfigurable" lets Android 12+ launchers change it later.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="250dp"
@@ -16,5 +19,7 @@
     android:initialLayout="@layout/widget_layout"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
+    android:configure="com.example.claudewidget.WidgetConfigActivity"
+    android:widgetFeatures="reconfigurable"
     android:previewImage="@drawable/ic_claude">
 </appwidget-provider>

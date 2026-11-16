@@ -7,13 +7,15 @@ Android home screen widgets that track and display your real-time [Claude](https
 | <img src="widget-claude-4x2.png" height="250"/> | <img src="widget-chatgpt-4x2.png" height="250"/> |
 
 ## Features
+- **Usage Tab**: Open the app and your usage is right there: the **Usage** tab shows every signed-in account as the same card as its home screen widget. It refreshes when you open the app and then every minute while the tab stays open (adjustable in **Settings → Usage Tab Refresh**). Tap a card to open that account.
+- **Multiple Accounts**: Add more than one Claude or ChatGPT account (up to 10 each) with **+ Add account** on the Claude or ChatGPT tab, and give each a name like "Work" or "Personal". When you add a widget, you pick which account it shows; on Android 12 and later you can change it later by reconfiguring the widget. Each account has its own optional quota notification.
 - **Real-Time Usage Tracking**: Displays your current Session limit usage and Weekly limit usage natively on your Android home screen, plus weekly Fable usage on the Claude widget when Claude reports it.
 - **Responsive Widget Layouts**: Widgets start at **4x2**, the smallest supported size, and can be made larger. The layout adapts to the space the widget gets, switching to a more compact layout when it is tight.
 - **Auto-Refresh Integration**: Configurable shared background sync (via Android `WorkManager`) updates both widgets and any enabled quota notifications every 15m, 30m, 1h, 2h, 4h, or can be set to "Never" for manual-only refreshes.
 - **Instant Manual Refresh**: Tapping anywhere on the widget instantly triggers a one-shot sync and provides immediate "Refreshing..." visual feedback, including across Wi-Fi → mobile-data handoffs.
-- **Ongoing Quota Notifications**: Optionally keep a separate Claude and/or ChatGPT quota notification in the notification shade. Each shows session and weekly usage/reset text, includes the last refreshed time in its title, opens the matching service tab when tapped, and has a separate **Refresh** action.
-- **Smart Error Redirect**: If your session expires or encounters a network error, tapping the widget opens the app on that service's tab so you can log back in.
-- **Shared Settings**: The **Settings** tab contains the auto-refresh interval, shared widget tap action, optional screen-on refresh, and the app log. Screen-on refresh is best-effort while Android keeps the app process alive and uses a two-minute cooldown after recent updates.
+- **Ongoing Quota Notifications**: Optionally keep a quota notification for any account in the notification shade. Each shows session and weekly usage/reset text, includes the next reset time in its title, opens that account in the app when tapped, and has a separate **Refresh** action.
+- **Smart Error Redirect**: If your session expires or encounters a network error, tapping the widget opens the app on that account so you can log back in.
+- **Shared Settings**: The **Settings** tab contains the auto-refresh interval, the Usage tab refresh interval, shared widget tap action, optional screen-on refresh, and the app log. Screen-on refresh is best-effort while Android keeps the app process alive and uses a two-minute cooldown after recent updates.
 - **Error Log**: Open **Settings → View Log** to see recent refreshes, errors, and logins (newest first). You can copy it to share when reporting a problem.
 - **Cloudflare & Google Auth Bypass**: Leverages a secure, in-app `WebView` for Google OAuth login. It dynamically extracts the required cookies (`cf_clearance`, `sessionKey`) and exact `User-Agent` to silently authenticate background API requests. Features a custom multi-window popup implementation to natively support Google Sign-In and smart session polling for instant login detection on Single Page Applications.
 
@@ -48,8 +50,9 @@ To work on the source locally:
 ## Usage
 1. Open the **AI Usage Widget** app from your app drawer.
 2. Pick the **Claude** or **ChatGPT** tab and log in (or use Google OAuth) via the secure in-app browser.
-3. Once you see the "Connected!" screen, go to your home screen and add the **Claude Widget** or **ChatGPT Widget**.
-4. Use the **Settings** tab for shared refresh/log options. Service-specific display and notification options remain on the Claude and ChatGPT tabs.
+3. Once you see the "Connected!" screen, your usage appears on the **Usage** tab. You can also go to your home screen and add the **Claude Widget** or **ChatGPT Widget**.
+4. To track another account, tap **+ Add account** on the Claude or ChatGPT tab and log in with it. **Rename** it on its tab so its widget and notification say which account they show. When a service has several accounts, adding its widget asks which one to show.
+5. Use the **Settings** tab for shared refresh/log options. Account-specific notification options and service-specific display options remain on the Claude and ChatGPT tabs.
 
 ## Technical Notes
 If you are interested in how the major technical hurdles were overcome (such as bypassing Cloudflare's bot protection, fixing Google OAuth WebView restrictions, or navigating Android's strict `RemoteViews` constraints), see the in-depth [Development Notes (notes.md)](notes.md) file.

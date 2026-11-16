@@ -17,6 +17,25 @@ signing certificate, so installing 1.0.9 over an older build fails until the old
 removed. Uninstalling clears app data, so you will need to sign in to Claude and ChatGPT
 again — once.
 
+## [1.3.0] - 2026-11-16
+
+### Added
+- **Usage tab.** The app now opens on a Usage tab showing every signed-in account as the same
+  card as its home screen widget. It refreshes when the app opens and every minute while the tab
+  stays open; **Settings → Usage Tab Refresh** changes the interval (30 seconds to 5 minutes, or
+  only when the app opens). Tap a card to open that account, or **Refresh** to refresh now.
+- **Multiple accounts.** Add up to 10 Claude and 10 ChatGPT accounts with **+ Add account** on the
+  Claude or ChatGPT tab, rename them ("Work", "Personal"), and remove the ones you no longer need.
+  Each account has its own saved sign-in, readings and optional quota notification.
+- When a service has more than one account, adding its widget asks which account to show, and the
+  widget title names it (for example `Claude · Work`). On Android 12 and later, reconfigure a
+  widget to change its account.
+
+### Changed
+- Your existing Claude and ChatGPT sign-ins become each service's first account ("Account 1")
+  with their readings, settings, notifications and widgets unchanged. Nothing needs to be redone.
+- Tapping a widget or notification opens the app on the account it shows.
+
 ## [1.2.1] - 2026-11-09
 
 ### Fixed

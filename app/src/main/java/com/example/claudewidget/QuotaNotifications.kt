@@ -18,74 +18,82 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
- * Optional persistent quota notifications, one per service.
+ * Optional persistent quota notifications, one per account (see [Accounts]).
  *
  * Android 14+ allows users to swipe away many notifications marked ongoing. A delete intent is
  * attached so an enabled quota notification is posted again if that happens. The setting in the
- * app is the authoritative way to turn a service's notification off.
+ * app is the authoritative way to turn an account's notification off.
  */
 object QuotaNotifications {
     const val ACTION_REFRESH = "com.example.claudewidget.ACTION_NOTIFICATION_REFRESH"
     const val ACTION_REPOST = "com.example.claudewidget.ACTION_NOTIFICATION_REPOST"
+    /** The account id ("claude", "chatgpt-2"). Older PendingIntents carry [EXTRA_SERVICE] instead. */
+    const val EXTRA_ACCOUNT = "account"
     const val EXTRA_SERVICE = "service"
 
     private const val CHANNEL_ID = "quota_status"
-    private const val CLAUDE_NOTIFICATION_ID = 4101
-    private const val CHATGPT_NOTIFICATION_ID = 4102
+    private const val NOTIFICATION_ID_BASE = 4101
 
-    fun prefKey(service: String) = if (service == "chatgpt") {
-        "chatgpt_notification_enabled"
-    } else {
-        "claude_notification_enabled"
+    /** The first accounts keep the keys used before multiple accounts ("claude_notification_enabled"). */
+    fun prefKey(account: String) = when (account) {
+        "claude", "chatgpt" -> "${account}_notification_enabled"
+        else -> "${Accounts.prefix(account)}notification_enabled"
     }
 
-    fun isEnabled(context: Context, service: String): Boolean =
-        prefs(context).getBoolean(prefKey(service), false)
+    fun isEnabled(context: Context, account: String): Boolean =
+        prefs(context).getBoolean(prefKey(account), false)
 
-    fun setEnabled(context: Context, service: String, enabled: Boolean) {
-        prefs(context).edit().putBoolean(prefKey(service), enabled).apply()
+    fun setEnabled(context: Context, account: String, enabled: Boolean) {
+        prefs(context).edit().putBoolean(prefKey(account), enabled).apply()
         if (enabled) {
-            updateService(context, service)
-            if (needsResetTimestamp(context, service)) UpdateWidgetWorker.runNow(context)
+            updateAccount(context, account)
+            if (needsResetTimestamp(context, account)) UpdateWidgetWorker.runNow(context)
         } else {
-            cancel(context, service)
+            cancel(context, account)
         }
     }
 
     /** Re-post enabled notifications after app start/update, if notification permission is available. */
     fun restoreEnabled(context: Context) {
-        updateService(context, "claude")
-        updateService(context, "chatgpt")
+        val accounts = Accounts.all(prefs(context))
+        accounts.forEach { updateAccount(context, it) }
 
         // 1.1.3 stored only relative reset text. After upgrading, fetch once so enabled
         // notifications get an exact absolute reset timestamp without waiting for the next interval.
-        if (needsResetTimestamp(context, "claude") || needsResetTimestamp(context, "chatgpt")) {
+        if (accounts.any { needsResetTimestamp(context, it) }) {
             UpdateWidgetWorker.runNow(context)
         }
     }
 
-    fun cancel(context: Context, service: String) {
-        NotificationManagerCompat.from(context).cancel(notificationId(service))
+    fun cancel(context: Context, account: String) {
+        NotificationManagerCompat.from(context).cancel(notificationId(account))
+    }
+
+    /** Drops a removed account's notification and its setting, so a later account with the same id starts off. */
+    fun forget(context: Context, account: String) {
+        cancel(context, account)
+        prefs(context).edit().remove(prefKey(account)).apply()
     }
 
     /**
-     * Updates a service's notification from the same saved quota values used by its widget.
-     * If the option is off, permission is missing, or the service is logged out, no notification
+     * Updates an account's notification from the same saved quota values used by its widget.
+     * If the option is off, permission is missing, or the account is logged out, no notification
      * is posted.
      */
-    fun updateService(context: Context, service: String) {
-        if (!isEnabled(context, service)) return
+    fun updateAccount(context: Context, account: String) {
+        if (!isEnabled(context, account)) return
         if (!canPostNotifications(context)) return
 
         val prefs = prefs(context)
-        if (!SessionStore.get(context).isLoggedIn(service)) {
-            cancel(context, service)
+        if (!SessionStore.get(context).isLoggedIn(account)) {
+            cancel(context, account)
             return
         }
 
         ensureChannel(context)
 
-        val prefix = if (service == "chatgpt") "chatgpt_" else ""
+        val service = Accounts.serviceOf(account)
+        val prefix = Accounts.prefix(account)
         val showLeft = UsageDisplay.mode(prefs, service) == "left"
         val sessionUsed = prefs.getInt("${prefix}session_prog", 0)
         val weeklyUsed = prefs.getInt("${prefix}weekly_prog", 0)
@@ -101,10 +109,10 @@ object QuotaNotifications {
         )
         val sessionReset = prefs.getString("${prefix}session_reset", "Tap refresh") ?: "Tap refresh"
         val weeklyReset = prefs.getString("${prefix}weekly_reset", "Tap refresh") ?: "Tap refresh"
-        val name = if (service == "chatgpt") "ChatGPT" else "Claude"
+        val name = Accounts.displayName(prefs, account)
         val title = notificationTitle(prefs, prefix, weeklyUsed, name)
 
-        val fableUsed = if (service == "claude") prefs.getInt("fable_prog", -1) else -1
+        val fableUsed = if (service == "claude") prefs.getInt("${prefix}fable_prog", -1) else -1
         val fableText = if (fableUsed >= 0) UsageDisplay.text("$fableUsed% used", fableUsed, showLeft) else null
         val compact = buildString {
             append("Session $sessionText · Weekly $weeklyText")
@@ -115,14 +123,14 @@ object QuotaNotifications {
             append('\n')
             append("Weekly: $weeklyText — $weeklyReset")
             if (fableText != null) {
-                val fableReset = prefs.getString("fable_reset", "Unknown")
+                val fableReset = prefs.getString("${prefix}fable_reset", "Unknown")
                 append("\nFable: $fableText — $fableReset")
             }
         }
 
         notifySafely(context,
-            notificationId(service),
-            baseBuilder(context, service)
+            notificationId(account),
+            baseBuilder(context, account)
                 .setContentTitle(title)
                 .setContentText(compact)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(expanded))
@@ -131,19 +139,19 @@ object QuotaNotifications {
     }
 
     /** Keeps the old readings visible while clearly showing that a manual refresh is running. */
-    fun showRefreshing(context: Context, service: String) {
-        if (!isEnabled(context, service) || !canPostNotifications(context)) return
+    fun showRefreshing(context: Context, account: String) {
+        if (!isEnabled(context, account) || !canPostNotifications(context)) return
         val prefs = prefs(context)
-        if (!SessionStore.get(context).isLoggedIn(service)) return
+        if (!SessionStore.get(context).isLoggedIn(account)) return
 
         ensureChannel(context)
-        val name = if (service == "chatgpt") "ChatGPT" else "Claude"
-        val prefix = if (service == "chatgpt") "chatgpt_" else ""
+        val name = Accounts.displayName(prefs, account)
+        val prefix = Accounts.prefix(account)
         val weeklyUsed = prefs.getInt("${prefix}weekly_prog", 0)
         val title = notificationTitle(prefs, prefix, weeklyUsed, name)
         notifySafely(context,
-            notificationId(service),
-            baseBuilder(context, service)
+            notificationId(account),
+            baseBuilder(context, account)
                 .setContentTitle(title)
                 .setContentText("Refreshing quota…")
                 .build()
@@ -212,11 +220,11 @@ object QuotaNotifications {
         prefs.getLong("${prefix}session_reset_epoch_ms", 0L)
     }
 
-    private fun needsResetTimestamp(context: Context, service: String): Boolean {
-        if (!isEnabled(context, service)) return false
+    private fun needsResetTimestamp(context: Context, account: String): Boolean {
+        if (!isEnabled(context, account)) return false
         val prefs = prefs(context)
-        if (!SessionStore.get(context).isLoggedIn(service)) return false
-        val prefix = if (service == "chatgpt") "chatgpt_" else ""
+        if (!SessionStore.get(context).isLoggedIn(account)) return false
+        val prefix = Accounts.prefix(account)
         val weeklyUsed = prefs.getInt("${prefix}weekly_prog", 0)
         if (weeklyUsed < 100 && prefs.getString("${prefix}session_reset", null) == "Ready") return false
         return nextResetEpochMs(prefs, prefix, weeklyUsed) <= 0L
@@ -237,33 +245,31 @@ object QuotaNotifications {
         }
     }
 
-    private fun baseBuilder(context: Context, service: String): NotificationCompat.Builder {
+    /**
+     * Intent extras don't make PendingIntents distinct, so each account gets its own request codes
+     * (base + [Accounts.slot]). The first accounts keep the codes used before multiple accounts.
+     */
+    private fun baseBuilder(context: Context, account: String): NotificationCompat.Builder {
+        val service = Accounts.serviceOf(account)
+        val slot = Accounts.slot(account)
         val openPending = PendingIntent.getActivity(
             context,
-            if (service == "chatgpt") 4402 else 4401,
-            MainActivity.openTabIntent(context, service),
+            4401 + slot,
+            MainActivity.openAccountIntent(context, account),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val refreshIntent = Intent(context, QuotaNotificationReceiver::class.java).apply {
-            action = ACTION_REFRESH
-            putExtra(EXTRA_SERVICE, service)
-        }
         val refreshPending = PendingIntent.getBroadcast(
             context,
-            if (service == "chatgpt") 4202 else 4201,
-            refreshIntent,
+            4201 + slot,
+            receiverIntent(context, ACTION_REFRESH, account),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val repostIntent = Intent(context, QuotaNotificationReceiver::class.java).apply {
-            action = ACTION_REPOST
-            putExtra(EXTRA_SERVICE, service)
-        }
         val repostPending = PendingIntent.getBroadcast(
             context,
-            if (service == "chatgpt") 4302 else 4301,
-            repostIntent,
+            4301 + slot,
+            receiverIntent(context, ACTION_REPOST, account),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -293,8 +299,15 @@ object QuotaNotifications {
         manager.createNotificationChannel(channel)
     }
 
-    private fun notificationId(service: String) =
-        if (service == "chatgpt") CHATGPT_NOTIFICATION_ID else CLAUDE_NOTIFICATION_ID
+    /** A refresh or repost action for the private [QuotaNotificationReceiver]. */
+    fun receiverIntent(context: Context, action: String, account: String): Intent =
+        Intent(context, QuotaNotificationReceiver::class.java).apply {
+            this.action = action
+            putExtra(EXTRA_ACCOUNT, account)
+        }
+
+    /** 4101 and 4102 for the first Claude and ChatGPT accounts, as before multiple accounts. */
+    private fun notificationId(account: String) = NOTIFICATION_ID_BASE + Accounts.slot(account)
 
     private fun prefs(context: Context) =
         context.getSharedPreferences("ClaudeWidgetPrefs", Context.MODE_PRIVATE)

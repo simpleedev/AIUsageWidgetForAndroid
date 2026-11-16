@@ -1,11 +1,9 @@
 package com.example.claudewidget
 
-import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Build
 import android.os.Bundle
@@ -39,13 +37,15 @@ class ClaudeWidgetProvider : AppWidgetProvider() {
             status: String? = null
         ) {
             val prefs = context.getSharedPreferences("ClaudeWidgetPrefs", Context.MODE_PRIVATE)
+            val account = Accounts.widgetAccount(prefs, appWidgetId, Accounts.CLAUDE)
             val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
-            appWidgetManager.updateAppWidget(appWidgetId, createViews(context, prefs, options, status))
+            appWidgetManager.updateAppWidget(appWidgetId, createViews(context, prefs, account, options, status))
         }
 
         internal fun createViews(
             context: Context,
             prefs: SharedPreferences,
+            account: String,
             options: Bundle,
             status: String? = null
         ): RemoteViews {
@@ -58,25 +58,30 @@ class ClaudeWidgetProvider : AppWidgetProvider() {
                 )?.distinct()
                 if (!sizes.isNullOrEmpty() && sizes.size <= MAX_SIZED_VIEWS) {
                     return RemoteViews(sizes.associateWith {
-                        createViews(context, prefs, it.width.toInt(), it.height.toInt(), status)
+                        createViews(context, prefs, account, it.width.toInt(), it.height.toInt(), status)
                     })
                 }
             }
             // Older launchers only report the smallest width and height the widget may get.
             val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 110)
             val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 110)
-            return createViews(context, prefs, minWidth, minHeight, status)
+            return createViews(context, prefs, account, minWidth, minHeight, status)
         }
 
-        /** Views for a widget at least [minWidth] x [minHeight] dp. */
+        /**
+         * Views for [account]'s widget at least [minWidth] x [minHeight] dp. The app's Usage tab
+         * shows these same views, so it always matches the home screen widget.
+         */
         internal fun createViews(
             context: Context,
             prefs: SharedPreferences,
+            account: String,
             minWidth: Int,
             minHeight: Int,
             status: String? = null
         ): RemoteViews {
-            val fableUsed = prefs.getInt("fable_prog", -1)
+            val p = Accounts.prefix(account)
+            val fableUsed = prefs.getInt("${p}fable_prog", -1)
             val showFable = fableUsed >= 0 && minHeight >= MIN_FABLE_HEIGHT_DP
             val useWide = if (showFable) {
                 minWidth >= 180 && minHeight >= MIN_WIDE_FABLE_HEIGHT_DP
@@ -86,61 +91,28 @@ class ClaudeWidgetProvider : AppWidgetProvider() {
             val layoutId = if (useWide) R.layout.widget_layout_wide else R.layout.widget_layout
 
             val views = RemoteViews(context.packageName, layoutId)
-
-            // ---- Refresh button ----
-            val refreshIntent = Intent(context, QuotaNotificationReceiver::class.java).apply {
-                action = QuotaNotifications.ACTION_REFRESH
-                putExtra(QuotaNotifications.EXTRA_SERVICE, "claude")
-            }
-            val refreshPending = PendingIntent.getBroadcast(
-                context, 0, refreshIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            views.setOnClickPendingIntent(R.id.btn_refresh, refreshPending)
-
-            // ---- Tap widget body ----
-            val isError = prefs.getString("session_pct", "--") == "Error"
-            val tapAction = prefs.getString("tap_action", "refresh")
-            
-            if (isError || tapAction == "open_app") {
-                // Open app to Claude tab
-                val openAppPending = PendingIntent.getActivity(
-                    context, 1, MainActivity.openTabIntent(context, "claude"),
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                views.setOnClickPendingIntent(R.id.widget_root, openAppPending)
-            } else {
-                // Refresh on body tap
-                val refreshIntent2 = Intent(context, QuotaNotificationReceiver::class.java).apply {
-                    action = QuotaNotifications.ACTION_REFRESH
-                    putExtra(QuotaNotifications.EXTRA_SERVICE, "claude")
-                }
-                val refreshPending2 = PendingIntent.getBroadcast(
-                    context, 2, refreshIntent2,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                views.setOnClickPendingIntent(R.id.widget_root, refreshPending2)
-            }
+            WidgetClicks.bind(context, views, prefs, account)
+            views.setTextViewText(R.id.tv_title, Accounts.displayName(prefs, account))
 
             // ---- Bind data ----
             val showLeft = UsageDisplay.mode(prefs, "claude") == "left"
 
             if (status == null) {
                 UsageDisplay.bind(views, R.id.tv_session_pct, R.id.pb_session,
-                    prefs.getString("session_pct", "--"), prefs.getInt("session_prog", 0), showLeft)
+                    prefs.getString("${p}session_pct", "--"), prefs.getInt("${p}session_prog", 0), showLeft)
                 UsageDisplay.bind(views, R.id.tv_weekly_pct, R.id.pb_weekly,
-                    prefs.getString("weekly_pct", "--"), prefs.getInt("weekly_prog", 0), showLeft)
+                    prefs.getString("${p}weekly_pct", "--"), prefs.getInt("${p}weekly_prog", 0), showLeft)
             }
-            views.setTextViewText(R.id.tv_session_reset, status ?: prefs.getString("session_reset", "Tap refresh"))
-            views.setTextViewText(R.id.tv_weekly_reset, status ?: prefs.getString("weekly_reset", "Tap refresh"))
-            views.setTextViewText(R.id.tv_last_update, status ?: prefs.getString("last_update", "Not yet refreshed"))
+            views.setTextViewText(R.id.tv_session_reset, status ?: prefs.getString("${p}session_reset", "Tap refresh"))
+            views.setTextViewText(R.id.tv_weekly_reset, status ?: prefs.getString("${p}weekly_reset", "Tap refresh"))
+            views.setTextViewText(R.id.tv_last_update, status ?: prefs.getString("${p}last_update", "Not yet refreshed"))
 
             val fableVisibility = if (showFable) View.VISIBLE else View.GONE
             views.setViewVisibility(R.id.fable_gap, fableVisibility)
             views.setViewVisibility(R.id.fable_row, fableVisibility)
             if (showFable) {
                 UsageDisplay.bind(views, R.id.tv_fable_pct, R.id.pb_fable, "$fableUsed% used", fableUsed, showLeft)
-                views.setTextViewText(R.id.tv_fable_reset, prefs.getString("fable_reset", "Unknown"))
+                views.setTextViewText(R.id.tv_fable_reset, prefs.getString("${p}fable_reset", "Unknown"))
                 views.setViewVisibility(R.id.tv_fable_reset,
                     if (minHeight >= MIN_FABLE_RESET_HEIGHT_DP) View.VISIBLE else View.GONE)
             }
@@ -167,6 +139,10 @@ class ClaudeWidgetProvider : AppWidgetProvider() {
     override fun onAppWidgetOptionsChanged(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int, newOptions: Bundle) {
         // Re-render with the correct layout when the user resizes the widget
         updateAppWidget(context, appWidgetManager, appWidgetId)
+    }
+
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        Accounts.unbindWidgets(context.getSharedPreferences("ClaudeWidgetPrefs", Context.MODE_PRIVATE), appWidgetIds)
     }
 
 }

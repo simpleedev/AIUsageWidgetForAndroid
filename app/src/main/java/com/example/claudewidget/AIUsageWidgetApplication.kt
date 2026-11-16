@@ -26,9 +26,7 @@ class AIUsageWidgetApplication : Application() {
             if (!prefs.getBoolean("refresh_on_screen_on", false)) return
 
             val sessions = SessionStore.get(context)
-            val hasClaude = sessions.isLoggedIn("claude")
-            val hasChatGpt = sessions.isLoggedIn("chatgpt")
-            if (!hasClaude && !hasChatGpt) return
+            if (Accounts.all(prefs).none { sessions.isLoggedIn(it) }) return
 
             val now = System.currentTimeMillis()
             val lastSuccessfulRefresh = prefs.getLong("last_successful_refresh_epoch_ms", 0L)

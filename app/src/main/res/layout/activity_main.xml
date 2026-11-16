@@ -15,6 +15,19 @@
         android:padding="4dp">
 
         <TextView
+            android:id="@+id/tab_usage"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="Usage"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:background="#4A4A4A"
+            android:maxLines="1"/>
+
+        <TextView
             android:id="@+id/tab_claude"
             android:layout_width="0dp"
             android:layout_weight="1"
@@ -23,8 +36,10 @@
             android:text="Claude"
             android:textSize="15sp"
             android:textStyle="bold"
-            android:textColor="#FFFFFF"
-            android:background="#D4511E"/>
+            android:textColor="#888888"
+            android:background="#222222"
+            android:layout_marginStart="4dp"
+            android:maxLines="1"/>
 
         <TextView
             android:id="@+id/tab_chatgpt"
@@ -37,7 +52,8 @@
             android:textStyle="bold"
             android:textColor="#888888"
             android:background="#222222"
-            android:layout_marginStart="4dp"/>
+            android:layout_marginStart="4dp"
+            android:maxLines="1"/>
 
         <TextView
             android:id="@+id/tab_settings"
@@ -50,8 +66,28 @@
             android:textStyle="bold"
             android:textColor="#888888"
             android:background="#222222"
-            android:layout_marginStart="4dp"/>
+            android:layout_marginStart="4dp"
+            android:maxLines="1"/>
     </LinearLayout>
+
+    <!-- Account chips for the Claude and ChatGPT tabs: one per account, plus "+ Add account" -->
+    <HorizontalScrollView
+        android:id="@+id/account_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#121212"
+        android:scrollbars="none"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:id="@+id/account_chips"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp"
+            android:paddingBottom="4dp"/>
+    </HorizontalScrollView>
 
     <FrameLayout
         android:id="@+id/root_frame"
@@ -74,6 +110,22 @@
                 android:textSize="14sp"
                 android:background="#eeeeee"
                 android:textColor="#333333"/>
+
+            <!-- Only for a service with several accounts: drop an account that was never signed in -->
+            <TextView
+                android:id="@+id/btn_remove_pending_account"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:paddingBottom="12dp"
+                android:minHeight="32dp"
+                android:text="Remove this account"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:background="#eeeeee"
+                android:textColor="#C62828"
+                android:visibility="gone"/>
 
             <TextView
                 android:id="@+id/errorText"
@@ -171,6 +223,63 @@
                     android:textColor="#FFFFFF"
                     android:layout_marginTop="20dp"
                     android:layout_marginBottom="12dp"/>
+
+                <!-- Account name: shown on widgets, notifications and the Usage tab -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="#2a2a2a"
+                    android:padding="16dp"
+                    android:layout_marginBottom="16dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Account Name"
+                        android:textColor="#FFFFFF"
+                        android:textSize="15sp"
+                        android:layout_marginBottom="4dp"/>
+
+                    <TextView
+                        android:id="@+id/tv_account_name_hint"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Shown on widgets and notifications once you add another account."
+                        android:textColor="#808080"
+                        android:textSize="12sp"
+                        android:layout_marginBottom="12dp"/>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:id="@+id/tv_account_label"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
+                            android:layout_height="wrap_content"
+                            android:text="Account 1"
+                            android:textColor="#B0B0B0"
+                            android:textSize="15sp"
+                            android:maxLines="1"
+                            android:ellipsize="end"/>
+
+                        <TextView
+                            android:id="@+id/btn_rename_account"
+                            android:layout_width="wrap_content"
+                            android:layout_height="40dp"
+                            android:gravity="center"
+                            android:paddingStart="16dp"
+                            android:paddingEnd="16dp"
+                            android:text="Rename"
+                            android:textColor="#FFFFFF"
+                            android:textSize="14sp"
+                            android:background="#363636"/>
+                    </LinearLayout>
+                </LinearLayout>
 
                 <!-- Usage Display -->
                 <LinearLayout
@@ -283,6 +392,108 @@
                     android:textSize="13sp"
                     android:layout_marginTop="8dp"/>
 
+                <!-- Only when the service has more than one account -->
+                <TextView
+                    android:id="@+id/btn_remove_account"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:gravity="center"
+                    android:text="Remove this account"
+                    android:textColor="#E57373"
+                    android:textSize="13sp"
+                    android:layout_marginTop="4dp"
+                    android:visibility="gone"/>
+
+            </LinearLayout>
+        </ScrollView>
+
+        <!-- Usage: every signed-in account, drawn with the same views as its home screen widget -->
+        <ScrollView
+            android:id="@+id/usageLayout"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#1a1a1a"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingHorizontal="16dp"
+                android:paddingTop="16dp"
+                android:paddingBottom="24dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="4dp"
+                    android:layout_marginBottom="16dp">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Usage"
+                            android:textSize="24sp"
+                            android:textStyle="bold"
+                            android:textColor="#FFFFFF"/>
+
+                        <TextView
+                            android:id="@+id/tv_usage_status"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Not refreshed yet"
+                            android:textColor="#B0B0B0"
+                            android:textSize="13sp"
+                            android:layout_marginTop="2dp"/>
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/btn_usage_refresh"
+                        android:layout_width="wrap_content"
+                        android:layout_height="40dp"
+                        android:gravity="center"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:text="Refresh"
+                        android:textColor="#FFFFFF"
+                        android:textSize="14sp"
+                        android:background="#363636"/>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/usage_cards"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"/>
+
+                <TextView
+                    android:id="@+id/tv_usage_empty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="#2a2a2a"
+                    android:padding="20dp"
+                    android:text="No accounts connected yet. Sign in on the Claude or ChatGPT tab, and your usage shows up here."
+                    android:textColor="#B0B0B0"
+                    android:textSize="14sp"
+                    android:visibility="gone"/>
+
+                <TextView
+                    android:id="@+id/tv_usage_hint"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingHorizontal="4dp"
+                    android:layout_marginTop="4dp"
+                    android:text="Tap a card to open that account."
+                    android:textColor="#808080"
+                    android:textSize="12sp"/>
             </LinearLayout>
         </ScrollView>
 
@@ -346,6 +557,40 @@
 
                     <Spinner
                         android:id="@+id/spinner_interval"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:background="#363636"
+                        android:padding="8dp"
+                        android:popupBackground="#363636"/>
+                </LinearLayout>
+
+                <!-- Usage tab refresh while the app is open -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="#2a2a2a"
+                    android:padding="16dp"
+                    android:layout_marginBottom="16dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Usage Tab Refresh"
+                        android:textColor="#FFFFFF"
+                        android:textSize="15sp"
+                        android:layout_marginBottom="4dp"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="The Usage tab refreshes when you open the app, and then this often while it stays open."
+                        android:textColor="#808080"
+                        android:textSize="12sp"
+                        android:layout_marginBottom="12dp"/>
+
+                    <Spinner
+                        android:id="@+id/spinner_in_app_interval"
                         android:layout_width="match_parent"
                         android:layout_height="48dp"
                         android:background="#363636"

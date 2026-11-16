@@ -1,11 +1,10 @@
 package com.example.claudewidget
 
-import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Bundle
 import android.widget.RemoteViews
 
@@ -22,65 +21,52 @@ class ChatGptWidgetProvider : AppWidgetProvider() {
             }
         }
 
-        fun updateAppWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
-            // Choose layout based on widget height
+        fun updateAppWidget(
+            context: Context,
+            appWidgetManager: AppWidgetManager,
+            appWidgetId: Int,
+            status: String? = null
+        ) {
+            val prefs = context.getSharedPreferences("ClaudeWidgetPrefs", Context.MODE_PRIVATE)
+            val account = Accounts.widgetAccount(prefs, appWidgetId, Accounts.CHATGPT)
             val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
             val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 110)
             val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 110)
+            appWidgetManager.updateAppWidget(appWidgetId,
+                createViews(context, prefs, account, minWidth, minHeight, status))
+        }
+
+        /**
+         * Views for [account]'s widget at least [minWidth] x [minHeight] dp. The app's Usage tab
+         * shows these same views, so it always matches the home screen widget.
+         */
+        internal fun createViews(
+            context: Context,
+            prefs: SharedPreferences,
+            account: String,
+            minWidth: Int,
+            minHeight: Int,
+            status: String? = null
+        ): RemoteViews {
             val layoutId = if (minWidth >= 180 || minHeight < 80) R.layout.chatgpt_widget_layout_wide else R.layout.chatgpt_widget_layout
-
             val views = RemoteViews(context.packageName, layoutId)
-            val prefs = context.getSharedPreferences("ClaudeWidgetPrefs", Context.MODE_PRIVATE)
-
-            // ---- Refresh button ----
-            val refreshIntent = Intent(context, QuotaNotificationReceiver::class.java).apply {
-                action = QuotaNotifications.ACTION_REFRESH
-                putExtra(QuotaNotifications.EXTRA_SERVICE, "chatgpt")
-            }
-            val refreshPending = PendingIntent.getBroadcast(
-                context, 10, refreshIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            views.setOnClickPendingIntent(R.id.btn_refresh, refreshPending)
-
-            // ---- Tap widget body ----
-            val isError = prefs.getString("chatgpt_session_pct", "--") == "Error"
-            val tapAction = prefs.getString("tap_action", "refresh")
-
-            if (isError || tapAction == "open_app") {
-                // Open app to ChatGPT tab
-                val openAppPending = PendingIntent.getActivity(
-                    context, 11, MainActivity.openTabIntent(context, "chatgpt"),
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                views.setOnClickPendingIntent(R.id.widget_root, openAppPending)
-            } else {
-                // Refresh on body tap
-                val refreshIntent2 = Intent(context, QuotaNotificationReceiver::class.java).apply {
-                    action = QuotaNotifications.ACTION_REFRESH
-                    putExtra(QuotaNotifications.EXTRA_SERVICE, "chatgpt")
-                }
-                val refreshPending2 = PendingIntent.getBroadcast(
-                    context, 12, refreshIntent2,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                views.setOnClickPendingIntent(R.id.widget_root, refreshPending2)
-            }
+            WidgetClicks.bind(context, views, prefs, account)
+            views.setTextViewText(R.id.tv_title, Accounts.displayName(prefs, account))
 
             // ---- Bind data ----
+            val p = Accounts.prefix(account)
             val showLeft = UsageDisplay.mode(prefs, "chatgpt") == "left"
 
-            UsageDisplay.bind(views, R.id.tv_session_pct, R.id.pb_session,
-                prefs.getString("chatgpt_session_pct", "--"), prefs.getInt("chatgpt_session_prog", 0), showLeft)
-            views.setTextViewText(R.id.tv_session_reset, prefs.getString("chatgpt_session_reset", "Tap refresh"))
-
-            UsageDisplay.bind(views, R.id.tv_weekly_pct, R.id.pb_weekly,
-                prefs.getString("chatgpt_weekly_pct", "--"), prefs.getInt("chatgpt_weekly_prog", 0), showLeft)
-            views.setTextViewText(R.id.tv_weekly_reset, prefs.getString("chatgpt_weekly_reset", "Tap refresh"))
-
-            views.setTextViewText(R.id.tv_last_update, prefs.getString("chatgpt_last_update", "Not yet refreshed"))
-
-            appWidgetManager.updateAppWidget(appWidgetId, views)
+            if (status == null) {
+                UsageDisplay.bind(views, R.id.tv_session_pct, R.id.pb_session,
+                    prefs.getString("${p}session_pct", "--"), prefs.getInt("${p}session_prog", 0), showLeft)
+                UsageDisplay.bind(views, R.id.tv_weekly_pct, R.id.pb_weekly,
+                    prefs.getString("${p}weekly_pct", "--"), prefs.getInt("${p}weekly_prog", 0), showLeft)
+            }
+            views.setTextViewText(R.id.tv_session_reset, status ?: prefs.getString("${p}session_reset", "Tap refresh"))
+            views.setTextViewText(R.id.tv_weekly_reset, status ?: prefs.getString("${p}weekly_reset", "Tap refresh"))
+            views.setTextViewText(R.id.tv_last_update, status ?: prefs.getString("${p}last_update", "Not yet refreshed"))
+            return views
         }
 
         /** Show a "Refreshing..." state (or another [status], like "Waiting for network...") on the widget immediately */
@@ -88,46 +74,7 @@ class ChatGptWidgetProvider : AppWidgetProvider() {
             val mgr = AppWidgetManager.getInstance(context)
             val ids = mgr.getAppWidgetIds(ComponentName(context, ChatGptWidgetProvider::class.java))
             for (id in ids) {
-                val options = mgr.getAppWidgetOptions(id)
-                val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 110)
-                val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 110)
-                val layoutId = if (minWidth >= 180 || minHeight < 80) R.layout.chatgpt_widget_layout_wide else R.layout.chatgpt_widget_layout
-
-                val views = RemoteViews(context.packageName, layoutId)
-
-                // Keep click handlers
-                val refreshIntent = Intent(context, QuotaNotificationReceiver::class.java).apply {
-                    action = QuotaNotifications.ACTION_REFRESH
-                    putExtra(QuotaNotifications.EXTRA_SERVICE, "chatgpt")
-                }
-                views.setOnClickPendingIntent(R.id.btn_refresh, PendingIntent.getBroadcast(
-                    context, 10, refreshIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                ))
-                val prefs = context.getSharedPreferences("ClaudeWidgetPrefs", Context.MODE_PRIVATE)
-                val isError = prefs.getString("chatgpt_session_pct", "--") == "Error"
-                val tapAction = prefs.getString("tap_action", "refresh")
-
-                if (isError || tapAction == "open_app") {
-                    views.setOnClickPendingIntent(R.id.widget_root, PendingIntent.getActivity(
-                        context, 11, MainActivity.openTabIntent(context, "chatgpt"),
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    ))
-                } else {
-                    val refreshIntent2 = Intent(context, QuotaNotificationReceiver::class.java).apply {
-                        action = QuotaNotifications.ACTION_REFRESH
-                        putExtra(QuotaNotifications.EXTRA_SERVICE, "chatgpt")
-                    }
-                    views.setOnClickPendingIntent(R.id.widget_root, PendingIntent.getBroadcast(
-                        context, 12, refreshIntent2,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    ))
-                }
-
-                views.setTextViewText(R.id.tv_session_reset, status)
-                views.setTextViewText(R.id.tv_weekly_reset, status)
-                views.setTextViewText(R.id.tv_last_update, status)
-                mgr.updateAppWidget(id, views)
+                updateAppWidget(context, mgr, id, status)
             }
         }
     }
@@ -142,4 +89,7 @@ class ChatGptWidgetProvider : AppWidgetProvider() {
         updateAppWidget(context, appWidgetManager, appWidgetId)
     }
 
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        Accounts.unbindWidgets(context.getSharedPreferences("ClaudeWidgetPrefs", Context.MODE_PRIVATE), appWidgetIds)
+    }
 }

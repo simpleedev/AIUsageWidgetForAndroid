@@ -10,7 +10,11 @@ import java.security.KeyStore
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 
-/** All credential access goes through this store; quota readings/settings remain in ordinary prefs. */
+/**
+ * All credential access goes through this store; quota readings/settings remain in ordinary prefs.
+ * Sessions are keyed by account id (see [Accounts]). A service's first account uses the service
+ * name, so sessions saved before multiple accounts existed are read from the same record.
+ */
 class SessionStore internal constructor(
     private val legacy: SharedPreferences,
     private val secured: SharedPreferences,
@@ -18,49 +22,51 @@ class SessionStore internal constructor(
     private val onFailure: (Throwable) -> Unit = {}
 ) {
     data class Snapshot(
-        val service: String,
+        val account: String,
         val revision: Long,
         val cookies: String? = null,
         val accessToken: String? = null,
         val userAgent: String? = null
     ) {
+        val service: String get() = Accounts.serviceOf(account)
+
         val isLoggedIn: Boolean get() = !cookies.isNullOrEmpty() ||
             (service == "chatgpt" && !accessToken.isNullOrEmpty())
 
         // Never expose credentials through logs, assertions or exception messages.
-        override fun toString() = "SessionSnapshot(service=$service, revision=$revision, signedIn=$isLoggedIn)"
+        override fun toString() = "SessionSnapshot(account=$account, revision=$revision, signedIn=$isLoggedIn)"
     }
 
     private val lock = Any()
 
-    fun snapshot(service: String): Snapshot = synchronized(lock) {
-        requireService(service)
+    fun snapshot(account: String): Snapshot = synchronized(lock) {
+        Accounts.requireValid(account)
         try {
-            readLocked(service)
+            readLocked(account)
         } catch (e: Exception) {
             onFailure(e)
-            Snapshot(service, revision(service)) // Fail closed; never use plaintext as a fallback.
+            Snapshot(account, revision(account)) // Fail closed; never use plaintext as a fallback.
         }
     }
 
-    fun isLoggedIn(service: String) = snapshot(service).isLoggedIn
+    fun isLoggedIn(account: String) = snapshot(account).isLoggedIn
 
-    fun save(service: String, cookies: String?, token: String?, userAgent: String?): Snapshot = synchronized(lock) {
-        requireService(service)
-        val next = Snapshot(service, revision(service) + 1, cookies, token, userAgent)
+    fun save(account: String, cookies: String?, token: String?, userAgent: String?): Snapshot = synchronized(lock) {
+        Accounts.requireValid(account)
+        val next = Snapshot(account, revision(account) + 1, cookies, token, userAgent)
         require(next.isLoggedIn) { "Empty session" }
         persistLocked(next)
         next
     }
 
-    fun clear(service: String) = synchronized(lock) {
-        requireService(service)
-        clearLocked(service)
+    fun clear(account: String) = synchronized(lock) {
+        Accounts.requireValid(account)
+        clearLocked(account)
     }
 
     /** Prevent a request started before logout/re-login from restoring credentials or UI readings. */
     fun ifCurrent(expected: Snapshot, action: () -> Unit): Boolean = synchronized(lock) {
-        val current = snapshot(expected.service)
+        val current = snapshot(expected.account)
         if (!current.isLoggedIn || current.revision != expected.revision) return@synchronized false
         action()
         true
@@ -70,26 +76,28 @@ class SessionStore internal constructor(
         persistLocked(snapshot.copy(accessToken = token))
     }
 
-    private fun readLocked(service: String): Snapshot {
-        val storedRevision = revision(service)
-        val encoded = secured.getString(service, null)
+    private fun readLocked(account: String): Snapshot {
+        val storedRevision = revision(account)
+        val encoded = secured.getString(account, null)
         if (encoded != null) {
             // A completed migration may have crashed before the legacy cleanup.
-            removeLegacy(service)
+            removeLegacy(account)
             return try {
-                decode(service, storedRevision, cipher.decrypt(service, storedRevision, encoded))
+                decode(account, storedRevision, cipher.decrypt(account, storedRevision, encoded))
             } catch (e: Exception) {
                 // Corrupt records/missing keys must never resurrect an older plaintext session.
-                clearLocked(service)
+                clearLocked(account)
                 onFailure(e)
-                Snapshot(service, revision(service))
+                Snapshot(account, revision(account))
             }
         }
-        val cookies = legacy.getString(if (service == "claude") "saved_cookies" else "chatgpt_saved_cookies", null)
-        val token = if (service == "chatgpt") legacy.getString("chatgpt_access_token", null) else null
-        val ua = legacy.getString(if (service == "claude") "user_agent" else "chatgpt_user_agent", null)
-        val old = Snapshot(service, storedRevision + 1, cookies, token, ua)
-        if (!old.isLoggedIn) return Snapshot(service, storedRevision)
+        // Only the first account of each service can have a pre-1.1.9 plaintext session.
+        if (account != "claude" && account != "chatgpt") return Snapshot(account, storedRevision)
+        val cookies = legacy.getString(if (account == "claude") "saved_cookies" else "chatgpt_saved_cookies", null)
+        val token = if (account == "chatgpt") legacy.getString("chatgpt_access_token", null) else null
+        val ua = legacy.getString(if (account == "claude") "user_agent" else "chatgpt_user_agent", null)
+        val old = Snapshot(account, storedRevision + 1, cookies, token, ua)
+        if (!old.isLoggedIn) return Snapshot(account, storedRevision)
         persistLocked(old) // Encrypt, durably save, verify, then erase plaintext.
         return old
     }
@@ -100,43 +108,46 @@ class SessionStore internal constructor(
             put("token", snapshot.accessToken ?: JSONObject.NULL)
             put("userAgent", snapshot.userAgent ?: JSONObject.NULL)
         }.toString()
-        val encrypted = cipher.encrypt(snapshot.service, snapshot.revision, json)
+        // The account id is bound into the ciphertext, so one account's record can't be read as another's.
+        val encrypted = cipher.encrypt(snapshot.account, snapshot.revision, json)
         // Check encryption before changing storage; an unavailable key preserves the old record.
-        check(cipher.decrypt(snapshot.service, snapshot.revision, encrypted) == json)
-        if (!secured.edit().putString(snapshot.service, encrypted)
-                .putLong("${snapshot.service}_revision", snapshot.revision).commit()) {
+        check(cipher.decrypt(snapshot.account, snapshot.revision, encrypted) == json)
+        if (!secured.edit().putString(snapshot.account, encrypted)
+                .putLong("${snapshot.account}_revision", snapshot.revision).commit()) {
             throw IOException("Secure session write failed")
         }
-        val saved = secured.getString(snapshot.service, null) ?: throw IOException("Secure session missing")
-        check(cipher.decrypt(snapshot.service, snapshot.revision, saved) == json)
-        removeLegacy(snapshot.service)
+        val saved = secured.getString(snapshot.account, null) ?: throw IOException("Secure session missing")
+        check(cipher.decrypt(snapshot.account, snapshot.revision, saved) == json)
+        removeLegacy(snapshot.account)
     }
 
-    private fun clearLocked(service: String) {
+    private fun clearLocked(account: String) {
         // Delete legacy first, so even an interrupted logout cannot trigger migration again.
-        removeLegacy(service)
-        if (!secured.edit().remove(service).putLong("${service}_revision", revision(service) + 1).commit()) {
+        removeLegacy(account)
+        if (!secured.edit().remove(account).putLong("${account}_revision", revision(account) + 1).commit()) {
             throw IOException("Secure session removal failed")
         }
     }
 
-    private fun removeLegacy(service: String) {
-        val keys = if (service == "claude") listOf("saved_cookies", "user_agent")
-            else listOf("chatgpt_saved_cookies", "chatgpt_access_token", "chatgpt_user_agent")
+    private fun removeLegacy(account: String) {
+        val keys = when (account) {
+            "claude" -> listOf("saved_cookies", "user_agent")
+            "chatgpt" -> listOf("chatgpt_saved_cookies", "chatgpt_access_token", "chatgpt_user_agent")
+            else -> return
+        }
         if (keys.none { legacy.contains(it) }) return
         val editor = legacy.edit()
         keys.forEach { editor.remove(it) }
         if (!editor.commit()) throw IOException("Legacy session removal failed")
     }
 
-    private fun decode(service: String, revision: Long, plaintext: String): Snapshot {
+    private fun decode(account: String, revision: Long, plaintext: String): Snapshot {
         val json = JSONObject(plaintext)
         fun value(key: String) = if (json.isNull(key)) null else json.getString(key)
-        return Snapshot(service, revision, value("cookies"), value("token"), value("userAgent"))
+        return Snapshot(account, revision, value("cookies"), value("token"), value("userAgent"))
     }
 
-    private fun revision(service: String) = secured.getLong("${service}_revision", 0L)
-    private fun requireService(service: String) = require(service == "claude" || service == "chatgpt")
+    private fun revision(account: String) = secured.getLong("${account}_revision", 0L)
 
     companion object {
         private const val KEY_ALIAS = "aiusagewidget.sessions.v1"

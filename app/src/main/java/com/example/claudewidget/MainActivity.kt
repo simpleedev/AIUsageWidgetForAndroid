@@ -69,6 +69,9 @@ class MainActivity : AppCompatActivity() {
         private const val IN_APP_REFRESH_KEY = "in_app_refresh_seconds"
         private const val DEFAULT_IN_APP_REFRESH_SECONDS = 60L
 
+        /** Whether tapping a card on the Usage tab opens that account's tab. On by default. */
+        private const val CARD_OPENS_ACCOUNT_KEY = "usage_card_opens_account"
+
         /**
          * Opens the app on [account]'s tab with that account selected. If the app is already open,
          * CLEAR_TOP + SINGLE_TOP deliver this to onNewIntent so the tab still switches, instead of the
@@ -426,9 +429,16 @@ class MainActivity : AppCompatActivity() {
             card.minimumHeight = dp(heightDp)
             card.contentDescription = Accounts.displayName(sharedPrefs, account)
             card.findViewById<View>(R.id.btn_refresh)?.setOnClickListener { refreshUsageNow() }
-            card.setOnClickListener {
-                selectAccount(account)
-                switchTab(Accounts.serviceOf(account))
+            if (cardOpensAccount()) {
+                card.setOnClickListener {
+                    selectAccount(account)
+                    switchTab(Accounts.serviceOf(account))
+                }
+            } else {
+                // Also drops the widget's own tap action (refresh or open the app), so the body does nothing.
+                // setOnClickListener makes a view clickable even with null, so clear that afterwards.
+                card.setOnClickListener(null)
+                card.isClickable = false
             }
             container.addView(card, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
@@ -449,14 +459,17 @@ class MainActivity : AppCompatActivity() {
 
         val seconds = inAppRefreshSeconds()
         val every = inAppIntervalOptions.firstOrNull { it.second == seconds }?.first?.lowercase(Locale.getDefault())
+        val tapHint = if (cardOpensAccount()) "Tap a card to open that account. " else ""
         findViewById<TextView>(R.id.tv_usage_hint).text = if (seconds > 0L && every != null) {
-            "Tap a card to open that account. Refreshes $every while this tab is open."
+            "${tapHint}Refreshes $every while this tab is open."
         } else {
-            "Tap a card to open that account. Refreshes when you open the app."
+            "${tapHint}Refreshes when you open the app."
         }
     }
 
     private fun inAppRefreshSeconds() = sharedPrefs.getLong(IN_APP_REFRESH_KEY, DEFAULT_IN_APP_REFRESH_SECONDS)
+
+    private fun cardOpensAccount() = sharedPrefs.getBoolean(CARD_OPENS_ACCOUNT_KEY, true)
 
     private fun scheduleUsageTick() {
         usageHandler.removeCallbacks(usageTicker)
@@ -928,6 +941,20 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        // ---- Tapping a Usage tab card opens its account ----
+        val cardTapBox = findViewById<CheckBox>(R.id.cb_usage_card_opens_account)
+        cardTapBox.buttonTintList = ColorStateList(
+            arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+            intArrayOf(0xFFB0B0B0.toInt(), 0xFF808080.toInt())
+        )
+        cardTapBox.setOnCheckedChangeListener(null)
+        cardTapBox.isChecked = cardOpensAccount()
+        cardTapBox.setOnCheckedChangeListener { _, checked ->
+            // The Usage tab redraws its cards when it's shown, so nothing else to update here
+            sharedPrefs.edit().putBoolean(CARD_OPENS_ACCOUNT_KEY, checked).apply()
+            AppLog.i(this, "Settings", "Tap a Usage tab card to open its account ${if (checked) "enabled" else "disabled"}")
         }
 
         // ---- Shared widget tap action ----

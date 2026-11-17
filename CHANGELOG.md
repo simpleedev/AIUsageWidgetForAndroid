@@ -17,6 +17,12 @@ signing certificate, so installing 1.0.9 over an older build fails until the old
 removed. Uninstalling clears app data, so you will need to sign in to Claude and ChatGPT
 again — once.
 
+## [1.3.1] - 2026-11-17
+
+### Added
+- **Settings → Usage Tab Card Tap.** Uncheck **Tap a card to open that account** to keep the Usage
+  tab in place when you tap a card. The card's refresh button still works. On by default.
+
 ## [1.3.0] - 2026-11-17
 
 ### Added
@@ -318,6 +324,7 @@ Updates after this one will not need any of that.
 
 Initial release.
 
+[1.3.1]: https://github.com/john-gitdev/AIUsageWidgetForAndroid/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/john-gitdev/AIUsageWidgetForAndroid/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/john-gitdev/AIUsageWidgetForAndroid/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/john-gitdev/AIUsageWidgetForAndroid/compare/v1.1.9...v1.2.0

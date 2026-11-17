@@ -37,10 +37,11 @@ again — once.
   widget to change its account.
 - **All Accounts widgets.** Two new widgets show every signed-in account at once, starting at 4x4:
   the **All Accounts Widget** with a card for each account, and the **All Accounts List Widget**
-  with all of them in one compact list (each limit on a single line), which can also be shrunk to
-  4x2. Both rearrange to fit their size, drop Fable rows before they'd cut an account off, and
-  show "+N more" for accounts that still don't fit. Accounts with a refresh problem say so ("Session
-  expired — tap to log in", "Offline · 2:10 PM"), and readings stay up while refreshing.
+  with all of them in one evenly spaced list, each limit on a single line. The list's bars get
+  taller when there are fewer accounts, and it can be shrunk to 4x2. Both rearrange to fit their
+  size, drop Fable rows before they'd cut an account off, and show "+N more" for accounts that
+  still don't fit. Accounts with a refresh problem say so ("Session expired — tap to log in",
+  "Offline · 2:10 PM"), and readings stay up while refreshing.
 
 ### Changed
 - Your existing Claude and ChatGPT sign-ins become each service's first account ("Account 1")

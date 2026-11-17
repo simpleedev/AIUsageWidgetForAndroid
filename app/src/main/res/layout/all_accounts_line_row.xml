@@ -1,13 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   One row of the All Accounts list widget. Usually holds one entry; a wide widget puts several
-  side by side. Rows take the height their entries need, plus an equal share of what's left.
+  side by side. Rows take the height their entries need, plus a share of what's left in
+  proportion to their weight: the spacer shares inside an entry (all_accounts_line*.xml), 2.5
+  for Session and Weekly. all_accounts_line_row_fable.xml is for a row whose entry also has a
+  Fable row, one more share. So every spacer share is the same size across the widget.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/all_accounts_line_row"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_weight="1"
+    android:layout_weight="2.5"
     android:orientation="horizontal"
     android:showDividers="middle"
     android:divider="@drawable/widget_line"

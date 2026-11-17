@@ -13,6 +13,8 @@ class AllAccountsLayoutTest {
 
     private fun cards(count: Int, fable: Boolean = false) = List(count) { Card(fable = fable) }
 
+    private val listDensities = listOf(Density.LIST_LARGE, Density.LIST_MEDIUM, Density.LIST)
+
     @Test fun oneOrTwoAccountsGetLargeCardsInATypical4x4() {
         assertEquals(AllAccountsLayout.Plan(1, Density.LARGE, 1), AllAccountsLayout.plan(cards(1), 250, 250))
         assertEquals(AllAccountsLayout.Plan(1, Density.LARGE, 2), AllAccountsLayout.plan(cards(2), 340, 400))
@@ -45,11 +47,13 @@ class AllAccountsLayoutTest {
             assertTrue(AllAccountsLayout.cardHeight(Card(fable = true), density) > plain)
             val status = AllAccountsLayout.cardHeight(Card(status = true), density)
             // A list entry's status shares its title's line
-            if (density == Density.LIST) assertEquals(plain, status, 0f) else assertTrue(status > plain)
+            if (density in listDensities) assertEquals(plain, status, 0f) else assertTrue(status > plain)
         }
         assertTrue(AllAccountsLayout.cardHeight(Card(), Density.LARGE) > AllAccountsLayout.cardHeight(Card(), Density.NORMAL))
         assertTrue(AllAccountsLayout.cardHeight(Card(), Density.NORMAL) > AllAccountsLayout.cardHeight(Card(), Density.COMPACT))
         assertTrue(AllAccountsLayout.cardHeight(Card(), Density.COMPACT) > AllAccountsLayout.cardHeight(Card(), Density.LIST))
+        assertTrue(AllAccountsLayout.cardHeight(Card(), Density.LIST_LARGE) > AllAccountsLayout.cardHeight(Card(), Density.LIST_MEDIUM))
+        assertTrue(AllAccountsLayout.cardHeight(Card(), Density.LIST_MEDIUM) > AllAccountsLayout.cardHeight(Card(), Density.LIST))
     }
 
     @Test fun accountsThatDontFitAreLeftForMore() {
@@ -65,7 +69,7 @@ class AllAccountsLayoutTest {
                 val plan = AllAccountsLayout.plan(shapes, width, height, style = style)
                 val where = "$style: $count accounts (fable $fable) at ${width}x$height: $plan"
                 assertTrue(where, plan.columns in 1..count && plan.shown in 1..count)
-                assertEquals(where, style == Style.LIST, plan.density == Density.LIST)
+                assertEquals(where, style == Style.LIST, plan.density in listDensities)
                 // Never more columns than accounts, or the first row would have a hole in it
                 assertTrue(where, plan.columns <= plan.shown)
                 val gap = AllAccountsLayout.gap(style)
@@ -100,7 +104,7 @@ class AllAccountsLayoutTest {
     }
 
     @Test fun theListFitsOneAccountIn4x2() {
-        assertEquals(AllAccountsLayout.Plan(1, Density.LIST, 1), AllAccountsLayout.plan(cards(1), 340, 110, style = Style.LIST))
+        assertEquals(AllAccountsLayout.Plan(1, Density.LIST_MEDIUM, 1), AllAccountsLayout.plan(cards(1), 340, 110, style = Style.LIST))
     }
 
     @Test fun aListTooShortForTheMoreLinePutsItInTheHeader() {
@@ -112,10 +116,10 @@ class AllAccountsLayoutTest {
 
     @Test fun fableRowsGoBeforeAnAccountIsCutOff() {
         // One Claude account with Fable doesn't fit a 4x2 list; without Fable it does
-        assertEquals(AllAccountsLayout.Plan(1, Density.LIST, 1, fable = false),
+        assertEquals(AllAccountsLayout.Plan(1, Density.LIST_MEDIUM, 1, fable = false),
             AllAccountsLayout.plan(cards(1, fable = true), 340, 110, style = Style.LIST))
         // Where it fits, Fable stays
-        assertEquals(AllAccountsLayout.Plan(1, Density.LIST, 1),
+        assertEquals(AllAccountsLayout.Plan(1, Density.LIST_LARGE, 1),
             AllAccountsLayout.plan(cards(1, fable = true), 340, 250, style = Style.LIST))
     }
 
@@ -128,7 +132,7 @@ class AllAccountsLayoutTest {
     }
 
     @Test fun aWideShortListSplitsIntoColumns() {
-        assertEquals(AllAccountsLayout.Plan(2, Density.LIST, 4), AllAccountsLayout.plan(cards(4), 640, 230, style = Style.LIST))
+        assertEquals(AllAccountsLayout.Plan(2, Density.LIST_LARGE, 4), AllAccountsLayout.plan(cards(4), 640, 230, style = Style.LIST))
     }
 
     @Test fun longListsLeaveTheRestForMore() {
@@ -138,10 +142,22 @@ class AllAccountsLayoutTest {
     }
 
     @Test fun listResetTimesNeedRoom() {
-        assertTrue(AllAccountsLayout.listShowsResets(340, 1))
-        assertTrue(AllAccountsLayout.listShowsResets(640, 2))
-        assertFalse(AllAccountsLayout.listShowsResets(250, 1))
-        assertFalse(AllAccountsLayout.listShowsResets(300, 1, fontScale = 1.5f))
+        for (density in listDensities) {
+            assertTrue(AllAccountsLayout.listShowsResets(340, 1, density))
+            assertTrue(AllAccountsLayout.listShowsResets(640, 2, density))
+            assertFalse(AllAccountsLayout.listShowsResets(250, 1, density))
+            assertFalse(AllAccountsLayout.listShowsResets(300, 1, density, fontScale = 1.5f))
+        }
+        // Larger text needs a wider entry for its reset times
+        assertTrue(AllAccountsLayout.listShowsResets(280, 1, Density.LIST))
+        assertFalse(AllAccountsLayout.listShowsResets(280, 1, Density.LIST_LARGE))
+    }
+
+    @Test fun listBarsGrowWhenThereAreFewerAccounts() {
+        fun density(count: Int) = AllAccountsLayout.plan(cards(count), 340, 400, style = Style.LIST).density
+        for (count in 1..4) assertEquals("$count accounts", Density.LIST_LARGE, density(count))
+        assertEquals(Density.LIST_MEDIUM, density(5))
+        assertEquals(Density.LIST, density(6))
     }
 
     @Test fun listResetTimesDropTheirPrefix() {

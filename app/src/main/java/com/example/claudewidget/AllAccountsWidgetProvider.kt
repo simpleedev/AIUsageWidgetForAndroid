@@ -147,14 +147,24 @@ open class AllAccountsWidgetProvider : AppWidgetProvider() {
                 accounts.map { AllAccountsLayout.Card(fable = fableUsed(prefs, it) != null, status = statusLine(prefs, it) != null) },
                 widthDp, heightDp, fontScale, style
             )
-            val listResets = AllAccountsLayout.listShowsResets(widthDp, plan.columns, fontScale)
-            val rowLayout = if (style == Style.LIST) R.layout.all_accounts_line_row else R.layout.all_accounts_row
-            val rowId = if (style == Style.LIST) R.id.all_accounts_line_row else R.id.all_accounts_row
+            val listResets = AllAccountsLayout.listShowsResets(widthDp, plan.columns, plan.density, fontScale)
             // A short last row's entries share its whole width, so no row has a hole in it
             for (rowAccounts in accounts.take(plan.shown).chunked(plan.columns)) {
-                val row = RemoteViews(context.packageName, rowLayout)
+                val row: RemoteViews
+                val rowId: Int
+                if (style == Style.LIST) {
+                    // A list row's weight is its entries' spacer shares, so spare height comes out
+                    // the same size between every row of every entry (all_accounts_line_row.xml)
+                    val fable = plan.fable && rowAccounts.any { fableUsed(prefs, it) != null }
+                    row = RemoteViews(context.packageName,
+                        if (fable) R.layout.all_accounts_line_row_fable else R.layout.all_accounts_line_row)
+                    rowId = R.id.all_accounts_line_row
+                } else {
+                    row = RemoteViews(context.packageName, R.layout.all_accounts_row)
+                    rowId = R.id.all_accounts_row
+                }
                 for (account in rowAccounts) {
-                    val entry = if (style == Style.LIST) createLine(context, prefs, account, listResets, plan.fable)
+                    val entry = if (style == Style.LIST) createLine(context, prefs, account, plan.density, listResets, plan.fable)
                         else createCard(context, prefs, account, plan.density, plan.fable)
                     row.addView(rowId, entry)
                 }
@@ -182,9 +192,8 @@ open class AllAccountsWidgetProvider : AppWidgetProvider() {
         ): RemoteViews {
             val layout = if (density == Density.LARGE) R.layout.all_accounts_card_large else R.layout.all_accounts_card
             val card = RemoteViews(context.packageName, layout)
-            val fable = bindAccount(context, card, prefs, account, resets = density != Density.COMPACT,
+            bindAccount(context, card, prefs, account, resets = density != Density.COMPACT,
                 shortResets = false, showFable = showFable)
-            card.setViewVisibility(R.id.fable_gap, if (fable) View.VISIBLE else View.GONE)
             return card
         }
 
@@ -192,10 +201,17 @@ open class AllAccountsWidgetProvider : AppWidgetProvider() {
             context: Context,
             prefs: SharedPreferences,
             account: String,
+            density: Density,
             resets: Boolean,
             showFable: Boolean
         ): RemoteViews {
-            val line = RemoteViews(context.packageName, R.layout.all_accounts_line)
+            // Taller bars when there's room, which is when there are fewer accounts
+            val layout = when (density) {
+                Density.LIST_LARGE -> R.layout.all_accounts_line_large
+                Density.LIST_MEDIUM -> R.layout.all_accounts_line_medium
+                else -> R.layout.all_accounts_line
+            }
+            val line = RemoteViews(context.packageName, layout)
             bindAccount(context, line, prefs, account, resets, shortResets = true, showFable = showFable)
             return line
         }
@@ -203,7 +219,7 @@ open class AllAccountsWidgetProvider : AppWidgetProvider() {
         /**
          * Fills in one account's card or list entry, which share their ids. [resets] shows the time
          * to each limit's reset; [shortResets] drops its "Resets in" for the list's narrow column.
-         * [showFable] false leaves out the Fable row to make room. Returns whether it shows one.
+         * [showFable] false leaves out the Fable row (and the spacer above it) to make room.
          */
         private fun bindAccount(
             context: Context,
@@ -213,7 +229,7 @@ open class AllAccountsWidgetProvider : AppWidgetProvider() {
             resets: Boolean,
             shortResets: Boolean,
             showFable: Boolean
-        ): Boolean {
+        ) {
             val service = Accounts.serviceOf(account)
             val p = Accounts.prefix(account)
 
@@ -243,13 +259,13 @@ open class AllAccountsWidgetProvider : AppWidgetProvider() {
             views.setViewVisibility(R.id.tv_weekly_reset, resetVisibility)
 
             val fable = fableUsed(prefs, account)?.takeIf { showFable }
+            views.setViewVisibility(R.id.fable_gap, if (fable != null) View.VISIBLE else View.GONE)
             views.setViewVisibility(R.id.fable_row, if (fable != null) View.VISIBLE else View.GONE)
             if (fable != null) {
                 UsageDisplay.bind(views, R.id.tv_fable_pct, R.id.pb_fable, "$fable% used", fable, showLeft)
                 views.setTextViewText(R.id.tv_fable_reset, reset("${p}fable_reset", "Unknown"))
                 views.setViewVisibility(R.id.tv_fable_reset, resetVisibility)
             }
-            return fable != null
         }
 
         /**

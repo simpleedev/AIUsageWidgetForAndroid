@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- all_accounts_line_row.xml for a row whose entry has a Fable row: one more spacer share. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/all_accounts_line_row"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_weight="3.5"
+    android:orientation="horizontal"
+    android:showDividers="middle"
+    android:divider="@drawable/widget_line"
+    android:dividerPadding="4dp" />

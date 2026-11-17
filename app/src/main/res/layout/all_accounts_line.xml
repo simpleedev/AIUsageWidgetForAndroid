@@ -2,20 +2,32 @@
 <!--
   One account in the All Accounts list widget: a title line, then one line per limit with its
   bar between the label and the percentage, and the time to its reset at the end when there's
-  room. A status (offline or an error) shares the title's line. No card, gaps or spacers, so
-  it's as short as the text allows; spare height is shared out around the content. The ids
-  match all_accounts_card.xml. Sizes here are what AllAccountsLayout.cardHeight() estimates
-  for Density.LIST; change both together.
+  room. A status (offline or an error) shares the title's line. No card or fixed gaps, so it's
+  as short as the text allows, and spare height is shared out evenly by its spacers. The ids
+  match all_accounts_card.xml; all_accounts_line_medium.xml and all_accounts_line_large.xml are
+  the same with taller bars, for fewer accounts. Sizes here are what
+  AllAccountsLayout.cardHeight() estimates for Density.LIST; change both together.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/card_root"
+    tools:ignore="UselessLeaf"
     android:layout_width="0dp"
     android:layout_height="match_parent"
     android:layout_weight="1"
     android:orientation="vertical"
-    android:gravity="center_vertical"
     android:paddingHorizontal="4dp"
-    android:paddingVertical="4dp">
+    android:paddingVertical="1dp">
+
+    <!-- Spare height goes to these spacers: half a share above the title and below the last
+         row, half between the title and its rows, and a full share between rows. Half +
+         half meet at each divider, so the gaps between accounts match those inside one.
+         FrameLayouts, not the empty TextViews the other widget layouts use: a list row sizes
+         itself to its entry, and an empty TextView would still claim a line of text height. -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="0.5" />
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -53,6 +65,11 @@
             android:ellipsize="end"
             android:visibility="gone" />
     </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="0.5" />
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -104,6 +121,11 @@
             android:ellipsize="end" />
     </LinearLayout>
 
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -153,6 +175,14 @@
             android:maxLines="1"
             android:ellipsize="end" />
     </LinearLayout>
+
+    <!-- Shown and hidden together with fable_row -->
+    <FrameLayout
+        android:id="@+id/fable_gap"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:visibility="gone" />
 
     <LinearLayout
         android:id="@+id/fable_row"
@@ -205,5 +235,10 @@
             android:maxLines="1"
             android:ellipsize="end" />
     </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="0.5" />
 
 </LinearLayout>

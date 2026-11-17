@@ -30,7 +30,11 @@ internal object AllAccountsLayout {
         NORMAL,
         /** NORMAL cards without the reset times. */
         COMPACT,
-        /** The LIST style's only density: a title line and one line per limit. */
+        /** List entries with 12dp bars and larger text, for a few accounts. */
+        LIST_LARGE,
+        /** List entries with 8dp bars. */
+        LIST_MEDIUM,
+        /** The densest list entries, with 4dp bars: a title line and one line per limit. */
         LIST
     }
 
@@ -63,7 +67,8 @@ internal object AllAccountsLayout {
     private fun headerGap(style: Style) = if (style == Style.LIST) 6 else 8
 
     private fun densities(style: Style) =
-        if (style == Style.LIST) listOf(Density.LIST) else listOf(Density.LARGE, Density.NORMAL, Density.COMPACT)
+        if (style == Style.LIST) listOf(Density.LIST_LARGE, Density.LIST_MEDIUM, Density.LIST)
+        else listOf(Density.LARGE, Density.NORMAL, Density.COMPACT)
 
     /** Text line height per sp, with font padding off. Roboto needs about 1.17; the rest is margin for other fonts. */
     private const val LINE = 1.25f
@@ -73,6 +78,8 @@ internal object AllAccountsLayout {
         Density.LARGE -> 28 + 172 * fontScale
         Density.NORMAL, Density.COMPACT -> 20 + 105 * fontScale
         // Padding and a short bar, plus the label and percentage
+        Density.LIST_LARGE -> 20 + 189 * fontScale
+        Density.LIST_MEDIUM -> 20 + 174 * fontScale
         Density.LIST -> 20 + 160 * fontScale
     }
 
@@ -94,20 +101,29 @@ internal object AllAccountsLayout {
                 metrics * (text(11f) + 3f + 4f +
                     (if (density == Density.NORMAL) 1f + text(9f) else 0f)) +
                 metrics * 4f
-            // all_accounts_line.xml: the status shares the title's line, and the bar its row's
-            Density.LIST -> 2 * 4f +
-                max(14f, text(12f)) +
-                metrics * (2f + max(4f, text(11f)))
+            // all_accounts_line*.xml: the status shares the title's line, and the bar its row's.
+            // Their spacers only take what's left over, so they need nothing here. The padding is
+            // about half the gap above each row, so two entries' padding make one such gap.
+            Density.LIST_LARGE -> 2 * 3f + max(18f, text(15f)) + metrics * (6f + max(12f, text(13f)))
+            Density.LIST_MEDIUM -> 2 * 2f + max(16f, text(13f)) + metrics * (4f + max(8f, text(12f)))
+            Density.LIST -> 2 * 1f + max(14f, text(12f)) + metrics * (2f + max(4f, text(11f)))
         }
     }
 
     /**
-     * Whether list entries [columns] across a [widthDp]-wide widget have room for the reset time at
-     * the end of each row (all_accounts_line.xml: label, bar, percentage, reset).
+     * Whether list entries at [density], [columns] across a [widthDp]-wide widget, have room for
+     * the reset time at the end of each row (all_accounts_line*.xml: label, bar, percentage, reset).
      */
-    fun listShowsResets(widthDp: Int, columns: Int, fontScale: Float = 1f): Boolean {
+    fun listShowsResets(widthDp: Int, columns: Int, density: Density, fontScale: Float = 1f): Boolean {
         val cell = (widthDp - 2 * PADDING - gap(Style.LIST) * (columns - 1)) / columns.toFloat()
-        return cell >= 8 + 70 + 18 + (48 + 58 + 46) * fontScale
+        // The label, percentage and reset columns' minimum widths
+        val text = when (density) {
+            Density.LIST_LARGE -> 56 + 68 + 54
+            Density.LIST_MEDIUM -> 52 + 62 + 50
+            else -> 48 + 58 + 46
+        }
+        // Padding, the shortest useful bar, and the margins between the columns
+        return cell >= 8 + 70 + 18 + text * fontScale
     }
 
     fun plan(cards: List<Card>, widthDp: Int, heightDp: Int, fontScale: Float = 1f, style: Style = Style.CARDS): Plan {

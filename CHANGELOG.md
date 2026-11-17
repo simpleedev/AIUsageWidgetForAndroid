@@ -17,7 +17,7 @@ signing certificate, so installing 1.0.9 over an older build fails until the old
 removed. Uninstalling clears app data, so you will need to sign in to Claude and ChatGPT
 again — once.
 
-## [1.3.0] - 2026-11-16
+## [1.3.0] - 2026-11-17
 
 ### Added
 - **Usage tab.** The app now opens on a Usage tab showing every signed-in account as the same
@@ -318,6 +318,8 @@ Updates after this one will not need any of that.
 
 Initial release.
 
+[1.3.0]: https://github.com/john-gitdev/AIUsageWidgetForAndroid/compare/v1.2.1...v1.3.0
+[1.2.1]: https://github.com/john-gitdev/AIUsageWidgetForAndroid/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/john-gitdev/AIUsageWidgetForAndroid/compare/v1.1.9...v1.2.0
 [1.1.9]: https://github.com/john-gitdev/AIUsageWidgetForAndroid/compare/v1.1.8...v1.1.9
 [1.1.8]: https://github.com/john-gitdev/AIUsageWidgetForAndroid/compare/v1.1.7...v1.1.8
